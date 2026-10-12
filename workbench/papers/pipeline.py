@@ -190,8 +190,11 @@ def attention(day: str, iss: dict, log) -> dict:
 
 
 def choose(day: str, iss: dict, log) -> dict:
+    from . import taste
+
     already = [p["pid"] for p in iss.get("picks") or []]
-    new = select.pick(day, already)
+    room = fieldmod.cfg_selection().get("max_per_day", 10) - len(already)
+    new = taste.rerank(select.pick(day, already, pool=max(30, 3 * room)), room, log=log) if room > 0 else []
     for i, c in enumerate(new, start=len(already) + 1):
         c["rank"] = i
         c["picked_at"] = now_iso()
@@ -275,9 +278,24 @@ def periodic_reports(day: str, iss: dict, log) -> dict:
     return out
 
 
+def profile_suggest(day: str, iss: dict, log) -> dict:
+    """新评价攒够 3 条且没有待确认的建议时，起草画像修改（ADR-0036）；本人确认后才写入。"""
+    from . import manual, taste
+
+    n = taste.new_since_profile()
+    if manual.proposal_path().exists():
+        return {"pending_proposal": True, "new_ratings": n}
+    if n < 3:
+        return {"new_ratings": n}
+    prop = manual.suggest(log=log)
+    iss["profile_proposal"] = {"at": prop["created_at"], "ratings": n, "changes": prop.get("changes")}
+    log(f"根据 {n} 条新评价起草了画像修改，等本人确认")
+    return {"proposed": True, "new_ratings": n}
+
+
 STEPS = [("harvest", harvest), ("judge", judge), ("read", read), ("results", results_table), ("attention", attention), ("choose", choose),
          ("repos", repos), ("explain", explain_picks), ("map", field_map), ("ideate", ideation),
-         ("reports", periodic_reports)]
+         ("reports", periodic_reports), ("profile", profile_suggest)]
 
 
 def run(day: str | None = None, only: list | None = None) -> dict:
@@ -297,7 +315,7 @@ def run(day: str | None = None, only: list | None = None) -> dict:
 
 
 STEP_NAMES = {"harvest": "抓取", "judge": "相关性判定", "read": "速读", "results": "结果表", "attention": "关注度", "choose": "精选",
-              "repos": "新仓库", "explain": "精读", "map": "领域地图", "ideate": "构思", "reports": "报告"}
+              "repos": "新仓库", "explain": "精读", "map": "领域地图", "ideate": "构思", "reports": "报告", "profile": "画像"}
 
 
 def render_telegram(iss: dict, update: bool = False) -> str:
@@ -314,8 +332,9 @@ def render_telegram(iss: dict, update: bool = False) -> str:
             link = f"{url}/paper/{p['pid']}" if url else m.get("url")
             meta = " · ".join(x for x in [m.get("venue"), f"Q{p['quality']:.1f}" if p.get("quality") else None,
                                           "有代码" if m.get("code_urls") else None] if x)
+            why = f"\n👍 按你的评价：{e(p['like_reason'])}" if p.get("like_reason") else ""
             lines.append(f"{p['rank']}. <a href=\"{e(link)}\">{e(title)}</a>\n"
-                         f"{e(qr.get('one_liner') or '')}\n<i>{e(meta)}</i>")
+                         f"{e(qr.get('one_liner') or '')}\n<i>{e(meta)}</i>{why}")
     else:
         lines.append("今天没有达到质量门槛的新论文。")
     news = [p for p in iss.get("new") or [] if p not in {x["pid"] for x in picks}]
@@ -337,6 +356,10 @@ def render_telegram(iss: dict, update: bool = False) -> str:
     if bad:
         lines.append("<b>⚠️ 有步骤没成功</b>\n" + "\n".join(
             f"• {e(STEP_NAMES.get(k, k))}：{e(v.get('error', ''))[:200]}" for k, v in bad.items()))
+    if iss.get("profile_proposal"):
+        pp = iss["profile_proposal"]
+        lines.append(f"<b>🧭 根据你的 {pp.get('ratings')} 条新评价起草了画像修改</b>，确认后才生效（对 agent 说「看看画像修改建议」）：\n"
+                     + "\n".join(f"• {e(c)}" for c in (pp.get("changes") or [])[:5]))
     lines.append(f"<a href=\"{e(url)}/issue/{e(iss['day'])}\">在面板查看本期</a>")
     return "\n\n".join(lines)
 

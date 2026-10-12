@@ -107,7 +107,8 @@ cd panel && docker compose up -d --build
      代码是否真的开源、数字出处（原论文还是转引）；点数据集名看全部方法和各论文的评测设置。
    - **IDEA**：通过审稿的想法、对应的问题文档（真实例子作图）、审稿意见和查新记录。
    - **热点 / 报告**：近 72 小时讨论热度；周报、月报。
-3. **反馈都对 agent 说**（面板只读）：读过了、收藏、不相关、想复现这篇、开始验证 / 放弃 / 删除某个 IDEA、加种子论文……
+3. **反馈都对 agent 说**（面板只读）：读过了、收藏、不相关、**评价（1–5 分 + 理由）**、想复现这篇、开始验证 / 放弃 / 删除某个 IDEA、加种子论文……
+   评价会直接影响以后每天推的论文；新评价攒够 3 条会起草画像修改，你确认后才生效。
    agent 调用 `wb` 写入，并记进流水账。面板上的"复制指令"按钮可以直接复制这些话。
    - "不相关"的论文不再进精选，并作为反例写进相关性判定，以后少收类似的。
    - **自己提供论文**：对 agent 说"把这篇加进来"（arXiv 号、链接、标题或服务器上的 PDF 都行），直接进论文库并立刻做速读；
@@ -153,6 +154,7 @@ wb paper ls|show|mark <论文> [--read|--fav|--irrelevant|--reproduce] [--undo]
 wb seed ls|add|rm                      种子论文
 wb field show|set k=v                  研究方向
 wb map show|versions|rebuild           领域地图
+wb paper rate <论文> <1-5> --note …   评价论文（影响每日精选与画像）
 wb results [数据集]                    跨论文结果表（带评测规模）
 wb results refresh [--limit N]         归类新数据集名 + 补评测规模 + 重建索引
 wb idea ls|show|verify|abandon|promote|delete    IDEA（delete 只在你明确要求时）

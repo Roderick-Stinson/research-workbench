@@ -137,6 +137,21 @@ def cmd_paper(a):
             raise SystemExit("用法：wb paper add <arXiv号 | 链接 | \"标题\" | /服务器上/的.pdf>... [--seed] [--why 原因] [--explain]")
         res = manual.add(a.ids, seed=a.seed, why=a.why or "本人提供", explain=a.explain)
         return out_json(res) if a.json else None
+    elif a.action == "rate":
+        from . import taste
+        if a.undo and a.ids:
+            pid = resolve_pid(a.ids[0])
+            taste.rate(pid, None, undo=True)
+            print(f"{pid}：已撤销评价")
+            return None
+        if len(a.ids) != 2 or not a.ids[1].isdigit():
+            raise SystemExit("用法：wb paper rate <论文> <1-5> [--note \"理由（尽量用本人原话）\"]   1 很差 · 2 差 · 3 一般 · 4 好 · 5 很好")
+        pid = resolve_pid(a.ids[0])
+        r = taste.rate(pid, int(a.ids[1]), a.note)
+        m = store.load(pid) or {}
+        print(f"{pid}（{(m.get('title') or '')[:60]}）：{r['score']} 分 {r['label']}" + (f"，理由：{r['note']}" if r.get("note") else ""))
+        n = taste.new_since_profile()
+        print(f"上次画像修改以来新增评价 {n} 条" + ("，每日流程会据此起草画像修改，等你确认" if n >= 3 else "（攒够 3 条会起草画像修改）"))
     elif a.action == "mark":
         keys = [k for k in ("read", "fav", "irrelevant", "reproduce") if getattr(a, k)]
         if not keys and not a.note:
@@ -362,8 +377,8 @@ def register(add):
     p = add("backfill", cmd_backfill, "首次回填：引用 baseline 的论文 + arXiv 近 N 个月")
     p.add_argument("--months", type=int, default=12)
     p.add_argument("--judge-only", action="store_true", help="不抓取，只对库里待判定的做判定和速读")
-    p = add("paper", cmd_paper, "论文：ls / show / mark")
-    p.add_argument("action", choices=["ls", "show", "mark", "add"])
+    p = add("paper", cmd_paper, "论文：ls / show / mark / add / rate（评价 1–5）")
+    p.add_argument("action", choices=["ls", "show", "mark", "add", "rate"])
     p.add_argument("ids", nargs="*")
     p.add_argument("--picked", action="store_true")
     p.add_argument("--day")

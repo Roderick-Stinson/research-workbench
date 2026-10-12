@@ -1,4 +1,5 @@
-"""精选（ADR-0020 / ADR-0027）：分数 = 质量 + 关注度 + 与种子的关系 + 代码 / 录用，按质量门槛最多 10 篇。"""
+"""精选（ADR-0020 / ADR-0027）：分数 = 质量 + 关注度 + 与种子的关系 + 代码 / 录用，按质量门槛最多 10 篇。
+之后按本人的评价重排（taste.py，ADR-0036）。"""
 from __future__ import annotations
 
 import datetime as _dt
@@ -45,8 +46,8 @@ def eligible(meta: dict, day: str) -> bool:
     return age is None or age <= win
 
 
-def pick(day: str, already: list | None = None) -> list:
-    """返回 [{pid, score...}]，按分数降序；已在本期的不重复选。"""
+def pick(day: str, already: list | None = None, pool: int = 0) -> list:
+    """返回 [{pid, score...}]，按分数降序；已在本期的不重复选。pool > 0 时多返回一些候选（给口味重排用）。"""
     sel = fieldmod.cfg_selection()
     max_n, min_q = sel.get("max_per_day", 10), sel.get("min_quality", 6.0)
     already = list(already or [])
@@ -65,4 +66,4 @@ def pick(day: str, already: list | None = None) -> list:
             continue
         cands.append({"pid": m["id"], **sc})
     cands.sort(key=lambda x: -x["total"])
-    return cands[:room]
+    return cands[:max(room, pool)]

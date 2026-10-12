@@ -5,7 +5,12 @@
 {%- set n.i = n.i + 1 -%}{%- endif -%}{%- endfor -%}{%- endfor -%}
 {%- endmacro %}
 
+{% macro rating_badge(st) -%}
+{%- if st.rating -%}<span class="badge {{ 'bad' if st.rating.score <= 2 else ('ok' if st.rating.score >= 4 else '') }}" title="我的评价{% if st.rating.note %}：{{ st.rating.note }}{% endif %}（{{ st.rating.at[:10] }}）">我的评价 {{ '★' * st.rating.score }}{{ '☆' * (5 - st.rating.score) }}</span>{%- endif -%}
+{%- endmacro %}
+
 {% macro flags(st) -%}
+{{ rating_badge(st) }}
 {% if st.fav %}<span class="badge warn" title="收藏">★ 收藏</span>{% endif %}
 {% if st.read %}<span class="badge ok">已读</span>{% endif %}
 {% if st.reproduce %}<span class="badge run">想复现</span>{% endif %}
@@ -35,6 +40,9 @@
     {% if x.has_explainer %}<a class="badge run" href="/paper/{{ m.id }}#explainer">精读</a>{% endif %}
     {{ flags(x.st) }}
   </div>
-  {% if not compact %}<div class="pf">{{ facet_badges(qr, field) }}</div>{% endif %}
+  {% if x.pick and x.pick.like_reason %}<p class="small muted why">按你的评价：{{ x.pick.like_reason }}</p>{% endif %}
+  {% if not compact %}<div class="pf">{{ facet_badges(qr, field) }}
+    {% if not x.st.rating %}<button class="copy sm" data-text="评价论文 {{ m.id }}（{{ (qr.title_zh or m.title)|truncate(50) }}）： 分（1 很差 · 2 差 · 3 一般 · 4 好 · 5 很好），理由：">复制「评价」</button>{% endif %}
+  </div>{% endif %}
 </article>
 {%- endmacro %}

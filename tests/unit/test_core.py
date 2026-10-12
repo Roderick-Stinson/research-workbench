@@ -351,5 +351,50 @@ class TestResultsPipeline(unittest.TestCase):
         self.assertNotIn("CountBug", names)                          # 百分比指标超出 0–100 不进表
 
 
+class TestRatings(unittest.TestCase):
+    """评价 → 精选重排；攒够 3 条 → 起草画像（含口味），确认后才写入。"""
+    def setUp(self):
+        from workbench.papers import manual, store
+        os.environ["WB_LLM_PROTOCOL"] = "fake"
+        fieldmod.init_from("mas-arch-opt")
+        manual.proposal_path().unlink(missing_ok=True)
+        titles = ["Recursive Self-Improvement via agents", "Solid workflow search", "Topology design done right",
+                  "Another agentic workflow", "Recursive agent loop again"]
+        for i, t in enumerate(titles):
+            pid = f"arxiv-9999.2000{i}"
+            store.save({"id": pid, "arxiv": pid.split("-")[1], "title": t, "abstract": "multi-agent",
+                        "intake": {"state": "relevant"}, "published": "2026-10-10", "sources": []})
+            store.save_quickread(pid, {"one_liner": t, "quality": {"novelty": 7, "rigor": 7, "significance": 7}})
+        store._cache.clear()
+
+    def tearDown(self):
+        os.environ.pop("WB_LLM_PROTOCOL", None)
+
+    def test_rate_rerank_and_profile(self):
+        from workbench.papers import manual, pipeline, select, store, taste
+        taste.rate("arxiv-9999.20000", 1, "简直是狗屎")
+        with self.assertRaises(SystemExit):
+            taste.rate("arxiv-9999.20001", 6)
+        self.assertEqual(store.load_status("arxiv-9999.20000")["rating"]["label"], "很差")
+        self.assertEqual(taste.judge([{"pid": "arxiv-9999.20003"}]), {})       # 评价少于 3 条不调用模型
+        taste.rate("arxiv-9999.20001", 5, "扎实")
+        taste.rate("arxiv-9999.20002", 4)
+        store._cache.clear()
+        cands = [{"pid": "arxiv-9999.20004", "total": 0.9}, {"pid": "arxiv-9999.20003", "total": 0.5}]
+        out = taste.rerank(cands, 2, log=lambda *a: None)
+        self.assertEqual(out[0]["pid"], "arxiv-9999.20003")                    # 像低分论文的被压下去
+        self.assertTrue(out[0]["like_reason"])
+        self.assertEqual(taste.new_since_profile(), 3)
+        iss = {"day": "2026-10-12", "steps": {}, "picks": []}
+        self.assertTrue(pipeline.profile_suggest("2026-10-12", iss, lambda *a: None)["proposed"])
+        self.assertIn("profile_proposal", iss)
+        self.assertNotIn("taste", fieldmod.field())                             # 只起草，不写入
+        self.assertTrue(pipeline.profile_suggest("2026-10-12", iss, lambda *a: None)["pending_proposal"])
+        manual.apply()
+        self.assertEqual(fieldmod.field()["taste"]["dislikes"], ["（假模型）只有 prompt 增量"])
+        self.assertEqual(taste.new_since_profile(), 0)
+        self.assertIn("按你的评价", pipeline.render_telegram(dict(iss, picks=[dict(out[0], rank=1, quality=7)])))
+
+
 if __name__ == "__main__":
     unittest.main()

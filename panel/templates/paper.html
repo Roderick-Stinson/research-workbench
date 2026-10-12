@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_paper.html" import facet_badges, flags %}
+{% from "_paper.html" import facet_badges, flags, rating_badge %}
 {% block title %}{{ x.qr.title_zh or x.m.title }} · 论文{% endblock %}
 {% block body %}
 {% set m = x.m %}{% set qr = x.qr %}
@@ -17,6 +17,12 @@
   {{ flags(x.st) }}
 </div>
 <div class="pf">{{ facet_badges(qr, field, 20) }}</div>
+<div class="box myrate">
+  <div class="rh"><b>我的评价</b>
+  {% if x.st.rating %}{{ rating_badge(x.st) }} <span class="small muted">{{ x.st.rating.label }} · {{ x.st.rating.at[:10] }}</span>{% else %}<span class="small muted">还没评价。评价会直接影响以后每天推给你的论文；攒够 3 条新评价会起草画像修改，你确认后才生效。</span>{% endif %}</div>
+  {% if x.st.rating and x.st.rating.note %}<p class="rnote">{{ x.st.rating.note }}</p>{% endif %}
+  <div class="row-actions">{% for s, lab in [(5,'很好'),(4,'好'),(3,'一般'),(2,'差'),(1,'很差')] %}<button class="copy" data-text="评价论文 {{ m.id }}（{{ (qr.title_zh or m.title)|truncate(50) }}）：{{ s }} 分（{{ lab }}），理由：">复制「{{ s }} 分 {{ lab }}」</button>{% endfor %}</div>
+</div>
 <div class="row-actions">
   <button class="copy" data-text="把论文 {{ m.id }}（{{ (qr.title_zh or m.title)|truncate(60) }}）标为已读">复制「已读」</button>
   <button class="copy" data-text="收藏论文 {{ m.id }}">复制「收藏」</button>

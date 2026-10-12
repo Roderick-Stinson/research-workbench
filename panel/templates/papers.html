@@ -6,6 +6,7 @@
 {%- if q %}{% set _ = parts.append('q=' ~ q|urlencode) %}{% endif -%}
 {%- if sort != 'curated' %}{% set _ = parts.append('sort=' ~ sort) %}{% endif -%}
 {%- if picked %}{% set _ = parts.append('picked=1') %}{% endif -%}
+{%- if rated %}{% set _ = parts.append('rated=' ~ rated) %}{% endif -%}
 {%- for k, vs in sel.items() %}{% for v in vs %}{% set _ = parts.append('f=' ~ (k ~ '=' ~ v)|urlencode) %}{% endfor %}{% endfor -%}
 {%- if extra %}{% set _ = parts.append(extra) %}{% endif -%}
 ?{{ parts|join('&') }}
@@ -19,6 +20,10 @@
   <select name="sort" style="padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)">
     <option value="curated" {{ 'selected' if sort == 'curated' }}>已整理优先</option>
     <option value="latest" {{ 'selected' if sort == 'latest' }}>最新发表</option>
+    <option value="rated" {{ 'selected' if sort == 'rated' }}>最近评价</option>
+  </select>
+  <select name="rated" style="padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)">
+    {% for v, lab in [('', '我的评价：全部'), ('any', '评价过的'), ('high', '好（4–5 分）'), ('low', '差（1–2 分）'), ('none', '还没评价')] %}<option value="{{ v }}" {{ 'selected' if rated == v }}>{{ lab }}</option>{% endfor %}
   </select>
   <label class="small" style="display:flex;align-items:center;gap:4px"><input type="checkbox" name="picked" value="1" {{ 'checked' if picked }}>只看精选过的</label>
   <button class="copy" type="submit">筛选</button>

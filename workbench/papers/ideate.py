@@ -93,7 +93,7 @@ def _materials(w):
 PROPOSE_PROMPT = """你是「{name}」方向的研究者，为本人每天构思可以发 CCF-A 的研究 IDEA（ADR-0018 / 0024）。
 
 当前目录的材料：
-- library.json：论文库（每篇的一句话、方法、局限、维度）；全文在 {home}/papers/<id>/fulltext.txt，速读与抽取的数字在 quickread.json
+- library.json：论文库（每篇的一句话、方法、局限、维度；my_rating 是本人评价 1–5 分和理由，评价 ≤ 2 的论文不要当作方法依据）；全文在 {home}/papers/<id>/fulltext.txt，速读与抽取的数字在 quickread.json
 - map.json：领域地图（每类"没考虑到什么"是问题的天然入口）
 - problems.json：已有的问题；previous_ideas.json：以前想过的 IDEA（包括没通过评审的）——**不要重复**
 - experiments.json：本人的论文项目、claim、配置组均值方差、最近的 Run（outputs 里是逐样本结果，可做 bad case 分析）

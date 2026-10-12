@@ -298,8 +298,12 @@ def _fake(task: str, user: str):
             items.append({"i": int(i), "name": None if n.startswith("Bogus") else ("MANGO" if n == "MASS" else n),
                           "is_proposed": n in ("Ours", "MASS")})
         return {"proposed": ["Ours"], "items": items}
+    if task == "taste":
+        return {"items": [{"i": int(i), "like": 0.1 if "Recursive" in t else 0.9, "reason": "（假模型）"}
+                          for i, t in re.findall(r"^\[(\d+)\] (.*)$", user, re.M)]}
     if task == "field-suggest":
         return {"description": "（假模型）新的方向描述", "subtopics": ["子主题 A"], "arxiv_keywords": ["multi-agent", "agentic"],
+                "taste": {"likes": ["（假模型）实验扎实"], "dislikes": ["（假模型）只有 prompt 增量"]},
                 "changes": ["（假模型）根据本人提供的论文补充了描述"]}
     return {"narrative": "（假模型）占位"}
 
