@@ -416,6 +416,15 @@ class TestRatings(unittest.TestCase):
         iss = pipeline.load_issue(day)
         self.assertEqual(iss["replaced_picks"][-1]["reason"], "更关注提点")
         self.assertIn("重新精选", pipeline.render_telegram(iss, update=True))
+        # 额度用完：不退回原排序，恢复原精选并记下待补做
+        before = [p["pid"] for p in iss["picks"]]
+        with mock.patch.object(taste, "judge", side_effect=llm.LLMPaused("额度", time.time() + 60)):
+            r = pipeline.repick(day, reason="再来一次", log=lambda *a: None)
+        self.assertIn("paused", r)
+        iss = pipeline.load_issue(day)
+        self.assertEqual([p["pid"] for p in iss["picks"]], before)
+        self.assertEqual(iss["repick_pending"]["reason"], "再来一次")
+        self.assertTrue(all((store.load(p) or {}).get("picked") for p in before))
 
 
 if __name__ == "__main__":

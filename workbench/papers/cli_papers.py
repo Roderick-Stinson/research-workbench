@@ -45,7 +45,7 @@ def cmd_daily(a):
         print(pipeline.resume())
     elif a.action == "repick":
         res = pipeline.repick(a.date, reason=a.reason or "")
-        if a.force:
+        if a.force and "paused" not in res:  # 没真的重排就不推送
             res["push"] = pipeline.push(a.date, force=True)
         return out_json(res)
     elif a.action == "status":

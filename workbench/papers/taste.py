@@ -88,15 +88,20 @@ def judge(cands: list, kind: str = "daily") -> dict:
     return out
 
 
-def rerank(cands: list, room: int, log=print) -> list:
-    """按口味重排：total' = (1 - w)·原分数 + w·like。模型不可用时退回原排序。"""
+def rerank(cands: list, room: int, log=print, strict: bool = False) -> list:
+    """按口味重排：total' = (1 - w)·原分数 + w·like。
+    模型不可用时：每日流程（strict=False）退回原排序，不耽误出刊；本人要求的重新精选（strict=True）抛出 LLMPaused / 原异常。"""
     w = fieldmod.cfg_selection().get("taste_weight", 0.4)
     try:
         likes = judge(cands)
     except llm.LLMPaused as e:
+        if strict:
+            raise
         log(f"口味重排跳过（额度）：{e}")
         likes = {}
     except Exception as e:  # noqa: BLE001  口味重排失败不影响出刊
+        if strict:
+            raise
         log(f"口味重排跳过：{e}")
         likes = {}
     if not likes:

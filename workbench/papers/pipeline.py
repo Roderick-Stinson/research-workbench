@@ -189,12 +189,12 @@ def attention(day: str, iss: dict, log) -> dict:
     return {"updated": n}
 
 
-def choose(day: str, iss: dict, log) -> dict:
+def choose(day: str, iss: dict, log, strict: bool = False) -> dict:
     from . import taste
 
     already = [p["pid"] for p in iss.get("picks") or []]
     room = fieldmod.cfg_selection().get("max_per_day", 10) - len(already)
-    new = taste.rerank(select.pick(day, already, pool=max(30, 3 * room)), room, log=log) if room > 0 else []
+    new = taste.rerank(select.pick(day, already, pool=max(30, 3 * room)), room, log=log, strict=strict) if room > 0 else []
     for i, c in enumerate(new, start=len(already) + 1):
         c["rank"] = i
         c["picked_at"] = now_iso()
@@ -367,7 +367,8 @@ def render_telegram(iss: dict, update: bool = False) -> str:
 
 
 def repick(day: str | None = None, reason: str = "", log=print) -> dict:
-    """按最新的口味 / 评价重新精选本期（本人要求时）：原精选留在 replaced_picks，重新选、补精读、推送更新。"""
+    """按最新的口味 / 评价重新精选本期（本人要求时）：原精选留在 replaced_picks，重新选、补精读。
+    口味重排必须真的做了才算数：批量模型不可用时恢复原精选、记下 repick_pending，由 resume 在额度恢复后补做（不推送）。"""
     day = day or store.today()
     iss = load_issue(day)
     old = iss.get("picks") or []
@@ -376,10 +377,25 @@ def repick(day: str | None = None, reason: str = "", log=print) -> dict:
         if m and (m.get("picked") or {}).get("day") == day:
             m.pop("picked", None)
             store.save(m)
-    iss.setdefault("replaced_picks", []).append({"at": now_iso(), "reason": reason, "picks": old})
     iss["picks"] = []
+    try:
+        res = choose(day, iss, log, strict=True)
+    except (llm.LLMPaused, llm.LLMNotConfigured) as e:
+        for p in old:  # 恢复原精选
+            m = store.load(p["pid"])
+            if m:
+                m["picked"] = {"day": day, "rank": p.get("rank"), "score": p.get("total")}
+                store.save(m)
+        iss = load_issue(day)
+        iss["picks"] = old
+        iss["repick_pending"] = {"at": now_iso(), "reason": reason, "error": str(e)}
+        save_issue(iss)
+        log(f"重新精选暂停：{e}；额度恢复后自动补做并推送")
+        return {"paused": str(e), "until": getattr(e, "until", None)}
+    iss.setdefault("replaced_picks", []).append({"at": now_iso(), "reason": reason, "picks": old})
+    iss.pop("repick_pending", None)
+    iss["steps"]["choose"] = dict(iss["steps"].get("choose") or {}, status="ok", stats=res, ended=now_iso())
     save_issue(iss)
-    _step(iss, "choose", lambda: choose(day, iss, log), log)
     _step(iss, "explain", lambda: explain_picks(day, iss, log), log)
     keep = {p["pid"] for p in old} & {p["pid"] for p in iss["picks"]}
     log(f"重新精选：{len(iss['picks'])} 篇，其中 {len(keep)} 篇与原精选相同")
@@ -431,6 +447,14 @@ def resume(log=print) -> dict:
             out[day]["pushed_update"] = True
         if any(v == "paused" for v in after.values()):
             return out  # 又暂停了：回填也别跑
+    for day in [(today - _dt.timedelta(days=1)).isoformat(), today.isoformat()]:
+        if issue_path(day).exists() and load_issue(day).get("repick_pending"):
+            reason = load_issue(day)["repick_pending"].get("reason") or ""
+            r = repick(day, reason=reason, log=log)
+            out[f"repick {day}"] = r
+            if "paused" in r:
+                return out
+            push(day, force=True)
     if not llm.block_state():
         try:
             out["backfill"] = backfill(log=log)
