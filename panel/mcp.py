@@ -69,11 +69,19 @@ def t_get_map(version: int = 0):
     return fieldmap.load(int(version) or None) or {"error": "还没有领域地图"}
 
 
-def t_get_results(task: str = ""):
+def t_get_results(task: str = "", category: str = "", backbone: str = ""):
     rows = results.all_rows()
-    if not task:
-        return {"benchmarks": results.benchmarks(rows)}
-    return results.table(results.norm_task(task), rows)
+    if task:
+        return results.table(results.norm_task(task), rows)
+    if category:
+        bbs = results.backbones(rows, category)
+        bk = results.bb_key(backbone) if backbone else (bbs[0]["key"] if bbs else "")
+        t = results.matrix(rows, category, bk)
+        return {"backbones": bbs[:20], "cols": [{k: c[k] for k in ("dataset", "metric", "n_papers", "full_size", "mixed", "scales")} for c in t["cols"]],
+                "rows": [{"method": mt["name"], "own": mt["own"], "cells": {t["cols"][i]["dataset"] + " · " + t["cols"][i]["metric"]:
+                          {"value": c["value"], "scale": c["r"]["scale"], "paper": c["r"]["pid"], "where": c["r"]["where"]}
+                          for i, c in mt["cells"].items()}} for mt in t["rows"]]}
+    return {"categories": results.categories(rows), "benchmarks": results.benchmarks(rows)[:200]}
 
 
 def t_list_ideas():
@@ -124,7 +132,9 @@ TOOLS = {
     "get_paper": (t_get_paper, "读一篇论文：元数据、速读、抽取的结果；depth=full 时附精读文本。", {"id": "string", "depth": "string"}),
     "get_issue": (t_get_issue, "读某一天的一期（精选、新收录、进展、通过的 IDEA），day 省略为今天。", {"day": "string"}),
     "get_map": (t_get_map, "读领域地图（主分类、每类的代表工作与没考虑到的地方）；version 省略为最新。", {"version": "integer"}),
-    "get_results": (t_get_results, "跨论文结果表：不给 task 时列出 benchmark；给 task 返回该 benchmark 的对比。", {"task": "string"}),
+    "get_results": (t_get_results, "跨论文结果表：不给参数列出分类与数据集；给 category（math/code/qa/knowledge/agent/other）"
+                    "和可选 backbone 返回论文式对比表（行 = 方法，列 = 数据集 · 指标，带评测规模）；给 task 返回该数据集的全部报告。",
+                    {"task": "string", "category": "string", "backbone": "string"}),
     "list_ideas": (t_list_ideas, "列出告诉过本人的 IDEA。", {}),
     "get_idea": (t_get_idea, "读一个 IDEA：候选内容、审稿意见。", {"id": "string"}),
     "get_report": (t_get_report, "读报告：period=weekly|monthly|hot；key 省略为最新一期。", {"period": "string", "key": "string"}),

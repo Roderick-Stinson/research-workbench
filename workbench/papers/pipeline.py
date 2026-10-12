@@ -110,6 +110,16 @@ def harvest(day: str, iss: dict, log, lookback_days: int = 4) -> dict:
             att["hf_upvotes"] = max(att.get("hf_upvotes") or 0, r.get("hf_upvotes") or 0)
             store.save(m)
             stats["hf"] += 1
+    # 种子论文本身也要在库里（它们的数字是结果表里最重要的基线）
+    missing = [s["arxiv"] for s in fieldmod.seeds() if not index.find(arxiv=s["arxiv"])]
+    for r in sources.arxiv_by_ids(missing) if missing else []:
+        pid, _ = store.upsert(index, r, {"name": "seed", "ref": r["arxiv"]}, day=day)
+        m = store.load(pid)
+        m["backfill"] = True  # 不进当期精选
+        m["intake"] = {"state": "relevant", "relevance": 1.0, "reason": "种子论文（本人的 baseline）", "judged_at": now_iso()}
+        store.save(m)
+        new_ids.add(pid)
+        stats["seeds"] = stats.get("seeds", 0) + 1
     for s in fieldmod.seeds():
         try:
             rows = sources.seed_citations(s["arxiv"])
@@ -214,6 +224,18 @@ def explain_picks(day: str, iss: dict, log) -> dict:
     return explain.run([p["pid"] for p in iss.get("picks") or []], log=log)
 
 
+def results_table(day: str, iss: dict, log) -> dict:
+    """结果表（ADR-0034）：归类新出现的数据集名、补当期论文的评测规模、重建索引。老论文的评测规模由 resume 按回填预算补。"""
+    from . import datasets, results
+
+    out = {"datasets": datasets.classify(log=log)}
+    todo = datasets.pending(iss.get("candidates") or [])
+    if todo:
+        out["eval_sets"] = datasets.fill(todo, log=log)["ok"]
+    out.update(results.rebuild_index(log=log))
+    return out
+
+
 def field_map(day: str, iss: dict, log) -> dict:
     from . import fieldmap
 
@@ -247,7 +269,7 @@ def periodic_reports(day: str, iss: dict, log) -> dict:
     return out
 
 
-STEPS = [("harvest", harvest), ("judge", judge), ("read", read), ("attention", attention), ("choose", choose),
+STEPS = [("harvest", harvest), ("judge", judge), ("read", read), ("results", results_table), ("attention", attention), ("choose", choose),
          ("repos", repos), ("explain", explain_picks), ("map", field_map), ("ideate", ideation),
          ("reports", periodic_reports)]
 
@@ -268,7 +290,7 @@ def run(day: str | None = None, only: list | None = None) -> dict:
 # ---------------- 推送 ----------------
 
 
-STEP_NAMES = {"harvest": "抓取", "judge": "相关性判定", "read": "速读", "attention": "关注度", "choose": "精选",
+STEP_NAMES = {"harvest": "抓取", "judge": "相关性判定", "read": "速读", "results": "结果表", "attention": "关注度", "choose": "精选",
               "repos": "新仓库", "explain": "精读", "map": "领域地图", "ideate": "构思", "reports": "报告"}
 
 
@@ -362,7 +384,25 @@ def resume(log=print) -> dict:
             out["backfill"] = backfill(log=log)
         except llm.LLMPaused as e:
             out["backfill"] = f"暂停：{e}"
+    if not llm.block_state():
+        out["eval_sets"] = backfill_eval_sets(log=log)
     return out
+
+
+def backfill_eval_sets(limit: int = 80, log=print) -> dict:
+    """老论文补评测规模（ADR-0034），受回填预算约束；每次最多 limit 篇，补完重建结果表索引。"""
+    from . import datasets, results
+
+    todo = datasets.pending()[:limit]
+    if not todo:
+        return {"pending": 0}
+    try:
+        res = datasets.fill(todo, kind="backfill", log=log)
+        out = {"ok": res["ok"], "failed": len(res["failed"])}
+    except llm.LLMPaused as e:
+        out = {"paused": str(e)}
+    results.rebuild_index(log=log)
+    return dict(out, pending=len(datasets.pending()))
 
 
 def alert(text: str) -> None:

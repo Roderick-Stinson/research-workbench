@@ -275,12 +275,23 @@ def _fake(task: str, user: str):
                 "quickread": {"problem": "占位", "method": "占位", "results": "占位", "limitations": "占位"},
                 "setup": {"tasks": ["GSM8K"], "backbones": ["gpt-4o-mini"], "metrics": ["accuracy"], "baselines": ["AFlow"]},
                 "results": [{"method": "Ours", "is_proposed": True, "task": "GSM8K", "metric": "accuracy",
-                             "backbone": "gpt-4o-mini", "value": 80 + h % 15, "unit": "%", "where": "Table 1"}],
+                             "backbone": "gpt-4o-mini", "value": 80 + h % 15, "unit": "%", "where": "Table 1"},
+                            {"method": "CoT", "is_proposed": False, "task": "GSM8K", "metric": "Acc.",
+                             "backbone": "GPT-4o-mini", "value": 78, "unit": "%", "where": "Table 1"}],
+                "eval_sets": [{"task": "GSM8K", "split": "test", "n_eval": 1319 if h % 2 else 500,
+                               "full_size": None, "sampled": None, "how": None, "where": "Sec 4"}],
                 "facets": {"optimizes": [["通信拓扑", "workflow 代码 / 算子", "prompt"][h % 3]],
                            "search": [["LLM 直接生成", "MCTS / 树搜索", "强化学习"][h % 3]], "granularity": ["任务级（一个任务一个架构）"],
                            "kind": ["方法"]},
                 "quality": {"novelty": 5 + h % 5, "rigor": 5 + h % 4, "significance": 5 + h % 5, "reason": "假模型"},
                 "code_url": None, "venue_claim": None}
+    if task == "dataset-classify":
+        return {"items": [{"i": int(i), "name": n.strip(), "category": "other", "aggregate": False}
+                          for i, n in re.findall(r"^\[(\d+)\] (.*)$", user, re.M)]}
+    if task == "evalsets":
+        names = re.search(r"需要核对的数据集：(.*)", user).group(1).split("；")
+        return {"eval_sets": [{"task": n, "split": "test", "n_eval": 100, "full_size": None, "sampled": True,
+                               "how": "（假模型）随机抽样", "where": "Sec 4"} for n in names]}
     if task == "field-suggest":
         return {"description": "（假模型）新的方向描述", "subtopics": ["子主题 A"], "arxiv_keywords": ["multi-agent", "agentic"],
                 "changes": ["（假模型）根据本人提供的论文补充了描述"]}
