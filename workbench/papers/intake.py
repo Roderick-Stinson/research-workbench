@@ -10,7 +10,7 @@ import concurrent.futures as cf
 
 from ..util import now_iso
 from . import field as fieldmod
-from . import fulltext, llm, store
+from . import datasets, fulltext, llm, store
 
 SYS_RELEVANCE = """你是研究助理，负责判断论文是否属于下面这个研究方向。只判断"是否属于方向"，不评价论文好坏。
 
@@ -42,12 +42,15 @@ SYS_QUICKREAD = """你是严谨的研究助理，为"{name}"方向的研究者�
  "setup": {{"tasks": ["benchmark / 数据集"], "backbones": ["用到的 LLM"], "metrics": ["指标"], "baselines": ["对比方法"]}},
  "results": [{{"method": "方法名", "is_proposed": true|false, "task": "benchmark", "metric": "指标", "backbone": "LLM 或 null",
               "value": 数值, "unit": "%|$|tokens|s|其它或 null", "where": "Table 2"}}],
+ {eval_field},
  "facets": {{{facet_schema}}},
  "quality": {{"novelty": 1-10, "rigor": 1-10, "significance": 1-10, "reason": "两三句：新在哪、实验是否充分（基线、消融、种子数）、是否只是 prompt 层面的增量"}},
  "code_url": "原文给出的代码链接或 null",
  "venue_claim": "原文自称的录用会议（如 'ICLR 2026'）或 null"
 }}
-results 最多 60 条，优先：本文方法与最强 baseline 在主表上的数字、成本数字。"""
+results 最多 60 条，优先：本文方法与最强 baseline 在主表上的数字、成本数字。
+eval_sets：results 里出现的每个数据集各一条——用的哪个划分、实际评测了多少题、是完整划分还是抽样 / 子集、怎么选的。
+只写原文明确说的，没写就填 null，不要用你自己知道的数据集规模去补。"""
 
 
 def _negative_titles(limit: int = 30) -> str:
@@ -131,11 +134,16 @@ def quickread(meta: dict, kind: str = "daily") -> dict:
         text, basis = f"{meta.get('title')}\n\n{meta.get('abstract')}", "abstract"
     else:
         text, basis = fulltext.fetch(meta)
-    sys = SYS_QUICKREAD.format(name=f["name"], facet_schema=facet_schema(f))
+    sys = SYS_QUICKREAD.format(name=f["name"], facet_schema=facet_schema(f), eval_field=datasets.EVAL_FIELD)
     user = f"标题：{meta.get('title')}\n作者：{', '.join(meta.get('authors') or [])[:400]}\n\n=== 原文（{basis}）===\n{text}"
     res = llm.chat(sys, user, task="quickread", max_tokens=8192, kind=kind)
     res["facets_raw"] = res.get("facets")
     res["facets"] = normalize_facets(res.get("facets"), f)
+    if res.get("eval_sets"):
+        res["eval_sets"] = datasets.norm_eval_sets(res["eval_sets"])
+        res["eval_sets_at"] = now_iso()
+    else:
+        res.pop("eval_sets", None)  # 没抽到：留给 datasets.fill() 补
     res["basis"] = basis
     res["model_task"] = "quickread"
     res["generated_at"] = now_iso()

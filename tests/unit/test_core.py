@@ -201,5 +201,99 @@ class TestManualAndProfile(unittest.TestCase):
         self.assertTrue(list((config.home() / "registry" / "field.history").glob("field-*.json")))
 
 
+class TestResultsTable(unittest.TestCase):
+    def test_dataset_lookup_and_category(self):
+        from workbench.papers import datasets
+        self.assertEqual(datasets.lookup("gsm-8k")["name"], "GSM8K")
+        self.assertEqual(datasets.lookup("GPQA-Diamond")["category"], "knowledge")
+        self.assertNotEqual(datasets.lookup("AIME25")["name"], datasets.lookup("AIME 2024")["name"])
+        self.assertTrue(datasets.lookup("Avg.")["aggregate"])
+        self.assertTrue(datasets.lookup("SomeNewBench")["pending"])
+
+    def test_scale(self):
+        from workbench.papers import datasets
+        full = datasets.lookup("MATH")["full"]
+        self.assertEqual(datasets.scale({"n_eval": 617}, full)["status"], "subset")
+        self.assertEqual(datasets.scale({"n_eval": 5000}, full)["status"], "full")
+        self.assertEqual(datasets.scale({"sampled": False}, None)["status"], "full")
+        self.assertEqual(datasets.scale(None, full)["status"], "unknown")
+
+    def test_metric_and_method_norm(self):
+        from workbench.papers import results
+        self.assertEqual(results.canon_metric("Acc.", "%", "math")[:2], ("Accuracy", "quality"))
+        self.assertEqual(results.canon_metric("Solve Rate", None, "code")[0], "Pass@1")
+        self.assertEqual(results.canon_metric("Cost", "$", "math")[1:], ("cost", False))
+        self.assertEqual(results.m_key("CoT SC (5-shots)"), results.m_key("CoT-SC"))
+        self.assertEqual(results.m_key("AFlow (GPT-4o-mini)"), results.m_key("AFlow"))
+        self.assertEqual(results.bb_key("gpt-4o-mini-2024-07-18"), results.bb_key("GPT-4o-mini"))
+        self.assertEqual(results.bb_key("Qwen-3-8B"), results.bb_key("Qwen3-8B"))
+        self.assertNotEqual(results.bb_key("Qwen2.5-7B"), results.bb_key("Qwen2.5-72B"))
+
+    def test_matrix(self):
+        from workbench.papers import results
+
+        def row(pid, method, ds, v, prop=False, n=None, pub="2025-01-01"):
+            sc = {"status": "subset" if n else "full", "n": n, "full": 1319, "split": None, "how": None, "where": None}
+            return {"pid": pid, "paper": pid, "published": pub, "method": method, "mkey": results.m_key(method), "is_proposed": prop,
+                    "task_raw": ds, "dataset": ds, "category": "math", "metric": "Accuracy", "metric_raw": "acc", "kind": "quality",
+                    "higher_better": True, "backbone": "gpt-4o-mini", "bkey": results.bb_key("gpt-4o-mini"), "value": v, "unit": "%" if v > 1 else None, "where": "T1",
+                    "scale": sc}
+        rows = [row("p1", "AFlow", "GSM8K", 93.5, True), row("p1", "CoT", "GSM8K", 87.0),
+                row("p2", "MaAS", "GSM8K", 0.928, True, n=500, pub="2025-02-01"), row("p2", "AFlow", "GSM8K", 91.0, n=500),
+                row("p2", "AFlow w/o search", "GSM8K", 80.0)]
+        t = results.matrix(rows, "math", results.bb_key("gpt-4o-mini"))
+        self.assertEqual(len(t["cols"]), 1)
+        cells = {mt["name"]: mt["cells"][0] for mt in t["rows"]}
+        self.assertEqual(cells["AFlow"]["value"], 93.5)           # 优先方法自己的论文
+        self.assertEqual(len(cells["AFlow"]["others"]), 1)
+        self.assertEqual(cells["MaAS"]["value"], 92.8)            # 0.928 换算成百分数
+        self.assertEqual(cells["AFlow"]["rank"], 1)
+        self.assertEqual(cells["MaAS"]["rank"], 2)
+        self.assertNotIn("AFlow w/o search", cells)               # 消融默认隐藏
+        self.assertTrue(t["cols"][0]["mixed"])                    # 全量与子集混在一列
+        self.assertEqual(t["rows"][0]["name"], "CoT")             # 通用基线在上
+        self.assertEqual(len(results.matrix(rows, "math", results.bb_key("gpt-4o-mini"), full_only=True)["rows"]), 2)
+
+
+class TestResultsPipeline(unittest.TestCase):
+    """假模型：速读带 eval_sets → 归类 → 老论文补评测规模 → 索引 → 论文式表。"""
+    def setUp(self):
+        from workbench.papers import store
+        os.environ["WB_LLM_PROTOCOL"] = "fake"
+        fieldmod.init_from("mas-arch-opt")
+        for i in range(3):
+            pid = f"arxiv-9999.1000{i}"
+            store.save({"id": pid, "arxiv": pid.split("-")[1], "title": f"Agentic workflow {i}", "abstract": "multi-agent",
+                        "intake": {"state": "relevant"}, "published": f"2026-0{i + 1}-01", "sources": []})
+        store._cache.clear()
+
+    def tearDown(self):
+        os.environ.pop("WB_LLM_PROTOCOL", None)
+
+    def test_flow(self):
+        from workbench.papers import datasets, results, store
+        pids = [f"arxiv-9999.1000{i}" for i in range(3)]
+        self.assertEqual(intake.run_quickreads(pids, workers=2, log=lambda *a: None)["ok"], 3)
+        self.assertIn("eval_sets", store.load_quickread(pids[0]))           # 新速读自带评测规模
+        qr = store.load_quickread(pids[2])
+        qr.pop("eval_sets")
+        qr["results"].append({"method": "X", "task": "BrandNewBench", "metric": "acc", "value": 50, "where": "T2"})
+        store.save_quickread(pids[2], qr)
+        store._cache.clear()
+        self.assertIn(pids[2], datasets.pending())
+        datasets.fill(datasets.pending(), log=lambda *a: None)              # 老论文补
+        self.assertEqual(datasets.pending(), [])
+        datasets.classify(log=lambda *a: None)
+        self.assertFalse(datasets.lookup("BrandNewBench").get("pending"))
+        results.rebuild_index(log=lambda *a: None)
+        rows = results.all_rows()
+        self.assertTrue(rows and all(r["dataset"] for r in rows))
+        t = results.matrix(rows, "math", results.bb_key("gpt-4o-mini"))
+        self.assertEqual([c["dataset"] for c in t["cols"]], ["GSM8K"])
+        self.assertIn("CoT", [mt["name"] for mt in t["rows"]])              # "Acc." 与 "accuracy" 合成一列
+        sts = {g["status"] for g in t["cols"][0]["scales"]}
+        self.assertTrue(sts <= {"full", "subset"} and sts)
+
+
 if __name__ == "__main__":
     unittest.main()

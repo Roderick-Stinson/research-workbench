@@ -27,7 +27,7 @@ git checkout main && git pull --ff-only
 git checkout -b <简短描述>                      # 例如 fix/arxiv-429
 # 修改……
 python3 -m unittest discover -s tests/unit      # 单元测试
-WB_E2E_DIR=$(mktemp -d) bash tests/e2e.sh       # 端到端（假模型，不碰真实数据）
+WB_E2E_DIR=$(mktemp -d -p "$HOME") bash tests/e2e.sh   # 端到端（不碰真实数据）；目录不能在 /tmp 下（/tmp 的文件不算产物）
 git commit -am "<中文说明改了什么、为什么>"
 git push -u origin HEAD && gh pr create --fill
 ```

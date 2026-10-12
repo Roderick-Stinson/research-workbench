@@ -292,19 +292,44 @@ def cmd_map(a):
 
 
 def cmd_results(a):
-    from . import results
+    """wb results                   分类与数据集
+    wb results <数据集>             这个数据集的全部报告（带评测规模）
+    wb results refresh [--limit N]  归类新数据集名 + 补评测规模（按回填预算）+ 重建索引"""
+    from . import datasets, llm, results
 
+    args = a.task or []
+    if args[:1] == ["refresh"]:
+        out = {"datasets": datasets.classify()}
+        todo = datasets.pending()
+        if a.limit:
+            todo = todo[:a.limit]
+        if todo:
+            try:
+                out["eval_sets"] = datasets.fill(todo, kind="backfill")["ok"]
+            except llm.LLMPaused as e:
+                out["eval_sets"] = f"暂停：{e}"
+        out.update(results.rebuild_index())
+        out["pending"] = len(datasets.pending())
+        return out_json(out)
     rows = results.all_rows()
-    if not a.task:
+    if not args:
         bs = results.benchmarks(rows)
-        return out_json(bs) if a.json else [print(f"{t:24} {n} 篇") for t, n in bs]
-    t = results.table(results.norm_task(a.task), rows)
+        if a.json:
+            return out_json(bs)
+        names = dict(datasets.CATEGORIES)
+        for t, c, n in bs[:80]:
+            print(f"{names.get(c, c):10} {t:28} {n} 篇")
+        return None
+    t = results.table(results.norm_task(" ".join(args)), rows)
     if a.json:
         return out_json(t)
     for g in t["groups"]:
         print(f"\n== {t['task']} · {g['metric']} · {g['backbone']}")
         for r in g["rows"][:30]:
-            print(f"  {'*' if r['is_proposed'] else ' '} {r['value']:>8}  {r['method'][:30]:30}  {r['pid']}  {r.get('where') or ''}")
+            s = r["scale"]
+            sz = {"full": "全量", "subset": f"子集{s['n'] or ''}", "unknown": "?"}[s["status"]]
+            print(f"  {'*' if r['is_proposed'] else ' '} {r['value']:>8}  {r['method'][:30]:30}  {sz:8} {r['pid']}  {r.get('where') or ''}")
+    return None
 
 
 def cmd_report(a):
@@ -359,8 +384,9 @@ def register(add):
     p = add("map", cmd_map, "领域地图：show / versions / rebuild")
     p.add_argument("action", choices=["show", "versions", "rebuild"])
     p.add_argument("--version", type=int)
-    p = add("results", cmd_results, "跨论文结果表：不给 task 列 benchmark")
-    p.add_argument("task", nargs="?")
+    p = add("results", cmd_results, "跨论文结果表：不给参数列数据集；<数据集> 看报告；refresh 归类 + 补评测规模 + 重建索引")
+    p.add_argument("task", nargs="*")
+    p.add_argument("--limit", type=int, default=0)
     p = add("report", cmd_report, "周报 / 月报 / 热点：build / show / hot")
     p.add_argument("action", choices=["build", "show", "hot"])
     p.add_argument("--period", choices=["weekly", "monthly"], default="weekly")

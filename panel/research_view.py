@@ -1,12 +1,14 @@
 """面板：领域地图 / 结果表 / IDEA 与问题 / 热点 / 周月报（只读）。"""
 from __future__ import annotations
 
+from urllib.parse import urlencode
+
 from fastapi import HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
 
 from workbench import config
 from workbench.papers import field as fieldmod
-from workbench.papers import fieldmap, ideate, reports, results, store
+from workbench.papers import datasets, fieldmap, ideate, reports, results, store
 from workbench.util import read_json
 
 
@@ -21,6 +23,14 @@ def _titles(pids):
     return out
 
 
+def _qs(base: dict, **kw) -> str:
+    """结果表页面的链接：在当前选择上改几项。bb 允许空串（= 未注明 backbone）。"""
+    d = dict(base)
+    d.update(kw)
+    keep = {k: v for k, v in d.items() if v is not None and v != 0 and (v != "" or k == "bb") and not (k == "kind" and v == "quality")}
+    return "/results?" + urlencode(keep)
+
+
 def register(app, render):
     @app.get("/map", response_class=HTMLResponse)
     def map_page(request: Request, v: int = 0):
@@ -32,11 +42,26 @@ def register(app, render):
         return render(request, "map.html", m=m, versions=vers, titles=titles, field=fieldmod.field())
 
     @app.get("/results", response_class=HTMLResponse)
-    def results_page(request: Request, task: str = ""):
+    def results_page(request: Request, cat: str = "", bb: str | None = None, kind: str = "quality", full: int = 0,
+                     abl: int = 0, all: int = 0, ds: str = "", metric: str = "", task: str = ""):
         rows = results.all_rows()
-        bs = results.benchmarks(rows)
-        t = results.table(results.norm_task(task), rows) if task else (results.table(bs[0][0], rows) if bs else None)
-        return render(request, "results.html", benchmarks=bs, t=t)
+        cats = results.categories(rows)
+        ds = ds or (results.norm_task(task) if task else "")
+        n_pap = {r["pid"] for r in rows}
+        cover = {"papers": len(n_pap), "checked": len({r["pid"] for r in rows if r.get("has_eval")}),
+                 "pending_names": len({r["task_raw"] for r in rows if r.get("pending")})}
+        opts = {"cat": cat, "bb": bb, "kind": kind, "full": full, "abl": abl, "all": all}
+        if ds:
+            v = results.dataset_view(rows, ds, metric or None, full_only=bool(full), ablations=bool(abl))
+            return render(request, "results.html", cats=cats, view="dataset", t=v, cover=cover, opts=dict(opts, cat=v["category"]),
+                          cat_names=dict(datasets.CATEGORIES), qs=_qs)
+        cat = cat or (cats[0]["key"] if cats else "")
+        kind = kind if kind in ("quality", "cost") else "quality"
+        bbs = results.backbones(rows, cat, kind) if cat else []
+        bb = bb if bb is not None and any(b["key"] == bb for b in bbs) else (bbs[0]["key"] if bbs else "")
+        t = results.matrix(rows, cat, bb, kind, full_only=bool(full), ablations=bool(abl), single=bool(all)) if cat else None
+        return render(request, "results.html", cats=cats, view="matrix", t=t, bbs=bbs, cover=cover,
+                      opts=dict(opts, cat=cat, bb=bb, kind=kind), cat_names=dict(datasets.CATEGORIES), qs=_qs)
 
     @app.get("/ideas", response_class=HTMLResponse)
     def ideas_page(request: Request):
