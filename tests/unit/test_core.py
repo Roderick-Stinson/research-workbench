@@ -164,5 +164,42 @@ class TestConfigDefaults(unittest.TestCase):
         self.assertIsNone(d["telegram_env"])
 
 
+class TestManualAndProfile(unittest.TestCase):
+    def setUp(self):
+        from workbench.papers import store
+        self.store = store
+        os.environ["WB_LLM_PROTOCOL"] = "fake"
+        fieldmod.init_from("mas-arch-opt")
+        for pid, extra in (("arxiv-9999.00001", {"manual": {"why": "测试"}}), ("arxiv-9999.00002", {})):
+            m = {"id": pid, "arxiv": pid.split("-")[1], "title": f"Paper {pid}", "abstract": "multi-agent workflow",
+                 "intake": {"state": "relevant"}, "published": "2026-10-01", "sources": [], **extra}
+            store.save(m)
+        store.save_status("arxiv-9999.00002", {"irrelevant": "2026-10-12T10:00:00+08:00", "note": "单智能体"})
+        store._cache.clear()
+
+    def tearDown(self):
+        os.environ.pop("WB_LLM_PROTOCOL", None)
+
+    def test_manual_not_picked(self):
+        from workbench.papers import select
+        self.assertFalse(select.eligible(self.store.load("arxiv-9999.00001"), "2026-10-12"))
+
+    def test_negatives_in_relevance_prompt(self):
+        txt = intake._negative_titles()
+        self.assertIn("Paper arxiv-9999.00002", txt)
+        self.assertIn("单智能体", txt)
+
+    def test_suggest_then_apply(self):
+        from workbench.papers import manual
+        before = fieldmod.field()["description"]
+        prop = manual.suggest()
+        self.assertEqual(prop["based_on"]["negative"], 1)
+        self.assertEqual(fieldmod.field()["description"], before)  # suggest 不写入
+        manual.apply()
+        self.assertEqual(fieldmod.field()["description"], "（假模型）新的方向描述")
+        self.assertFalse(manual.proposal_path().exists())
+        self.assertTrue(list((config.home() / "registry" / "field.history").glob("field-*.json")))
+
+
 if __name__ == "__main__":
     unittest.main()

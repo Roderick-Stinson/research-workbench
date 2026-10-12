@@ -281,6 +281,9 @@ def _fake(task: str, user: str):
                            "kind": ["方法"]},
                 "quality": {"novelty": 5 + h % 5, "rigor": 5 + h % 4, "significance": 5 + h % 5, "reason": "假模型"},
                 "code_url": None, "venue_claim": None}
+    if task == "field-suggest":
+        return {"description": "（假模型）新的方向描述", "subtopics": ["子主题 A"], "arxiv_keywords": ["multi-agent", "agentic"],
+                "changes": ["（假模型）根据本人提供的论文补充了描述"]}
     return {"narrative": "（假模型）占位"}
 
 

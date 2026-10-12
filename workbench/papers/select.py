@@ -30,8 +30,8 @@ def score(meta: dict, qr: dict | None) -> dict:
 
 def eligible(meta: dict, day: str) -> bool:
     """可进当期精选：属于方向、有速读、没被选过、不是回填进来的旧论文、发表在窗口内。"""
-    if meta.get("intake", {}).get("state") != "relevant" or meta.get("picked"):
-        return False
+    if meta.get("intake", {}).get("state") != "relevant" or meta.get("picked") or meta.get("manual"):
+        return False  # 本人提供的论文已经知道了，不再推回去
     if (store.load_status(meta["id"]) or {}).get("irrelevant"):
         return False
     win = fieldmod.cfg_selection().get("pick_window_days", 90)

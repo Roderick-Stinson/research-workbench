@@ -77,12 +77,14 @@ def fetch(meta: dict, max_chars: int = 180_000) -> tuple:
         except Exception:
             pass
     pdf_url = meta.get("pdf_url") or (f"https://arxiv.org/pdf/{meta['arxiv']}" if meta.get("arxiv") else None)
-    if len(text) < 5000 and pdf_url:
+    local_pdf = d / "paper.pdf"
+    if len(text) < 5000 and (pdf_url or local_pdf.exists()):
         try:
-            pdf = http.get_bytes(pdf_url)
             pdf_path = d / "paper.pdf"
-            d.mkdir(parents=True, exist_ok=True)
-            pdf_path.write_bytes(pdf)
+            if not pdf_path.exists():  # 本人提供的 PDF 已经放好了
+                pdf = http.get_bytes(pdf_url)
+                d.mkdir(parents=True, exist_ok=True)
+                pdf_path.write_bytes(pdf)
             with tempfile.NamedTemporaryFile(suffix=".txt") as tf:
                 subprocess.run(["pdftotext", "-layout", str(pdf_path), tf.name], check=True, timeout=120,
                                capture_output=True)
