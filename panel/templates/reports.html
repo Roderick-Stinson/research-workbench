@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{{ '周报' if period == 'weekly' else '月报' }} · 实验工作台{% endblock %}
+{% block body %}
+<h1>{{ '周报' if period == 'weekly' else '月报' }}{% if rep %} · {{ rep.key }}{% endif %}</h1>
+<p class="sub">
+  {% for k in keys[:12] %}<a class="mono small" href="/reports?period={{ period }}&key={{ k }}">{{ k }}</a> {% endfor %}
+  · <a class="small" href="/reports?period={{ 'monthly' if period == 'weekly' else 'weekly' }}">{{ '看月报' if period == 'weekly' else '看周报' }}</a>
+</p>
+{% if rep %}
+<p class="small muted">{{ rep.start }} — {{ rep.end }} · 新收录 {{ rep.n_new }} 篇 · 精选 {{ rep.n_picks }} 篇 · 通过的 IDEA {{ (rep.ideas or [])|length }} 个</p>
+{% if rep.narrative %}<h2>本期走向</h2><p class="purpose">{{ rep.narrative }}</p>
+<details><summary class="small">引用编号</summary><ol class="small">{% for p in rep.narrative_refs %}{% set t = refs.get(p) %}<li><a href="/paper/{{ p }}">{{ t.title if t else p }}</a></li>{% endfor %}</ol></details>{% endif %}
+<h2>高分论文</h2>
+<div class="box">{% for x in rep.top %}<div class="inbox-item"><div><a href="/paper/{{ x.pid }}">{{ x.title }}</a><div class="small muted">{{ x.one_liner }}</div></div><div class="meta">分 {{ '%.2f'|format(x.score) }}</div></div>{% endfor %}</div>
+{% if rep.ideas %}<h2>通过的 IDEA</h2><div class="box">{% for i in rep.ideas %}<div class="inbox-item"><div><a href="/idea/{{ i.id }}">{{ i.title }}</a></div><div class="meta">均分 {{ i.score }}</div></div>{% endfor %}</div>{% endif %}
+{% if rep.map_versions %}<h2>领域地图变化</h2><p>{% for v in rep.map_versions %}<a href="/map?v={{ v.version }}">v{{ v.version }}</a>（{{ v.categories }} 类，{{ v.papers }} 篇）{% endfor %}</p>{% endif %}
+{% else %}<div class="empty"><p>还没有{{ '周报' if period == 'weekly' else '月报' }}。每周一 / 每月 1 日的每日流程会生成上一期。</p></div>{% endif %}
+{% endblock %}

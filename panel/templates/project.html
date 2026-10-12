@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% from "_macros.html" import agg_cell, state %}
+{% block title %}{{ p.title }} · 实验工作台{% endblock %}
+{% block body %}
+<p class="small"><a href="/">首页</a> /</p>
+<h1>{{ p.title }}</h1>
+<p class="sub">{{ p.id }}{% if p.venue %} · {{ p.venue }}{% endif %}{% if p.deadline %} · 截止 {{ p.deadline }}{% endif %}
+ · {{ ov.n_exp }} 个 claim · {{ ov.n_var }} 个配置组 · {{ ov.n_runs }} 个 Run · 产物 {{ human_bytes(ov.size) }}
+ {% if p.seed_fields %} · 种子字段：<span class="mono">{{ p.seed_fields|join(', ') }}</span>{% endif %}</p>
+{% if p.notes %}<p>{{ p.notes }}</p>{% endif %}
+
+{% for x in exps %}
+<h2>{{ x.e.id }} · {{ x.e.claim }}
+  <span class="badge {{ 'ok' if x.e.status == 'supported' else ('bad' if x.e.status == 'refuted' else 'muted') }}">{{ {'supported': '已支持', 'refuted': '被推翻', 'open': '进行中'}.get(x.e.status or 'open', x.e.status) }}</span></h2>
+{% if x.e.conclusion %}<p>结论：{{ x.e.conclusion }}</p>{% endif %}
+{% if x.rows %}
+<div class="box scroll-x">
+<table>
+  <thead><tr><th>配置组</th><th class="num">Run</th>{% for m in x.metrics %}<th class="num">{{ m }}</th>{% endfor %}<th>备注</th></tr></thead>
+  <tbody>
+  {% for row in x.rows %}
+  <tr>
+    <td><a href="/v/{{ row.v.id }}">{{ row.v.title or row.v.id }}</a>
+      {% if row.v.baseline %}<span class="badge muted">baseline</span>{% endif %}
+      <div class="muted small mono">{{ row.v.id }}</div></td>
+    <td class="num">{{ row.runs|length }}{% if row.running %} <span class="badge run">{{ row.running }} 跑</span>{% endif %}</td>
+    {% for m in x.metrics %}<td class="num">{{ agg_cell(row, m, x.best) }}</td>{% endfor %}
+    <td>{% for w in row.warns %}<div class="warnline">⚠ {{ w.msg }}</div>{% endfor %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="muted small">均值 ± 样本标准差（n = 状态为 ok 的 Run 数）。绿色为该列最大值（默认越大越好）。</p>
+{% else %}
+<div class="empty"><p>这个 claim 下还没有配置组。认领 Run 时 agent 会帮你建。</p></div>
+{% endif %}
+{% else %}
+<div class="empty"><p>还没有 claim。对 agent 说：「给 {{ p.id }} 加一个 claim：……」</p>
+<div class="row-actions"><button class="copy" data-text="给论文项目 {{ p.id }} 加一个 claim：">复制指令</button></div></div>
+{% endfor %}
+
+{% if timeline %}
+<h2>最近的 Run <span class="count">{{ timeline|length }}</span></h2>
+<div class="box scroll-x"><table>
+<thead><tr><th>Run</th><th>状态</th><th>配置组</th><th>开始</th><th class="num">时长</th><th>目的</th></tr></thead>
+<tbody>
+{% for r in timeline %}
+<tr><td class="mono"><a href="/r/{{ r.id }}">{{ r.id }}</a></td><td>{{ state(r) }}</td>
+<td><a href="/v/{{ r.claim.variant }}">{{ r.claim.variant }}</a></td><td>{{ fmt_time(r.started_at) }}</td>
+<td class="num">{{ human_duration(r.duration_s) }}</td><td>{{ r.claim.purpose or '' }}</td></tr>
+{% endfor %}
+</tbody></table></div>
+{% endif %}
+{% endblock %}

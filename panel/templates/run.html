@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% from "_macros.html" import state %}
+{% block title %}{{ r.id }} · 实验工作台{% endblock %}
+{% macro diffblock(text) -%}
+<pre class="diff">{% for line in text.split('\n') %}{% if line.startswith('diff --git') %}<span class="file">{{ line }}</span>{% elif line.startswith('@@') %}<span class="hunk">{{ line }}</span>{% elif line.startswith('+') and not line.startswith('+++') %}<span class="add">{{ line }}</span>{% elif line.startswith('-') and not line.startswith('---') %}<span class="del">{{ line }}</span>{% else %}{{ line }}
+{% endif %}{% endfor %}</pre>
+{%- endmacro %}
+{% block body %}
+<p class="small"><a href="/">首页</a> /
+{% if c.variant %}{% for p, e in (used_by or []) %}<a href="/p/{{ p.id }}">{{ p.title }}</a> · {% endfor %}<a href="/v/{{ c.variant }}">{{ c.variant }}</a> /{% else %}<a href="/inbox">待认领</a> /{% endif %}</p>
+<h1 class="mono" style="font-size:19px">{{ r.id }} {{ state(r) }}
+  {% if c.ignored %}<span class="badge muted">已忽略</span>{% elif not c.variant %}<span class="badge warn">待认领</span>{% endif %}
+  {% for t in tags %}{% if t in ('late_capture','artifacts_hardlinked','low_disk','service','ended_while_daemon_down') %}<span class="badge warn" title="{{ t }}">{{ {'late_capture':'迟到抓取','artifacts_hardlinked':'产物仅硬链接','low_disk':'磁盘偏低未复制','service':'服务','ended_while_daemon_down':'守护进程停机期间结束'}[t] }}</span>{% endif %}{% endfor %}
+</h1>
+{% if c.purpose %}<p class="purpose">{{ c.purpose }}{% if c.purpose_confirmed == false %} <span class="badge warn">草稿，待确认</span>{% endif %}</p>{% endif %}
+{% if c.conclusion %}<p>结论：{{ c.conclusion }}</p>{% endif %}
+<div class="row-actions">
+  {% if not c.variant %}<button class="copy" data-text="记录 {{ r.id }}（{{ r.cmdline | truncate(120, True, '…') }}）">复制「记录」指令</button>{% endif %}
+  <button class="copy" data-text="wb restore {{ r.id }}">复制还原命令</button>
+  <button class="copy" data-text="把 {{ r.id }} 的结论记为：">复制「写结论」指令</button>
+  {% if not c.variant and not c.ignored %}<button class="copy" data-text="忽略 {{ r.id }}，它不是实验">复制「忽略」指令</button>{% endif %}
+</div>
+
+<nav class="tabs">
+  {% for k, label in [('overview','概览'),('code','代码'),('logs','日志'),('env','环境'),('talk','对话')] %}
+  <a href="?tab={{ k }}{% if base and k == 'code' %}&vs={{ base.id }}{% endif %}" class="{{ 'on' if tab == k }}">{{ label }}</a>
+  {% endfor %}
+</nav>
+
+{% if tab == 'overview' %}
+<div class="grid2">
+<div class="box"><dl class="kv">
+  <dt>命令</dt><dd class="mono">{{ r.cmdline }}</dd>
+  <dt>cwd</dt><dd class="mono">{{ r.cwd }}</dd>
+  <dt>开始</dt><dd>{{ r.started_at }}（启动 {{ r.capture_delay_s }}s 后拍快照）</dd>
+  <dt>结束</dt><dd>{{ r.ended_at or '运行中' }}{% if r.duration_s %}，用时 {{ human_duration(r.duration_s) }}{% endif %}</dd>
+  {% if r.exit %}<dt>退出</dt><dd>{% if r.exit.code is not none %}退出码 {{ r.exit.code }}{% else %}<span class="muted">退出码拿不到（守护进程不是父进程），按日志推断：</span>{{ {'ok?':'日志里没有报错','error?':'日志里有报错','killed?':'可能被杀（OOM 等）','interrupted':'被中断','unknown':'没有日志，无法判断'}.get(r.exit.guess, r.exit.guess) }}{% endif %}</dd>{% endif %}
+  <dt>种子</dt><dd class="mono">{{ c.seed if c.seed is not none else (r.seeds or '-') }}</dd>
+  {% if r.parent_run %}<dt>父 Run</dt><dd><a class="mono" href="/r/{{ r.parent_run }}">{{ r.parent_run }}</a></dd>{% endif %}
+  {% if r.children %}<dt>子进程</dt><dd class="small">{{ r.children|length }} 个（已并入本 Run）</dd>{% endif %}
+  {% if r.gpu %}<dt>GPU</dt><dd>卡 {{ r.gpu.devices }}，峰值显存 {{ (r.gpu.peak_mem_mb / 1024) | round(1) }} GB</dd>{% endif %}
+  <dt>对话</dt><dd>{% if r.session and r.session.file %}{{ r.session.agent }} · 置信度 {{ r.session.confidence }} · <a href="?tab=talk">看对话</a>{% else %}<span class="muted">未关联（可能是手动启动的）</span>{% endif %}</dd>
+</dl></div>
+<div class="box"><dl class="kv">
+  {% if c.variant %}
+  <dt>配置组</dt><dd><a href="/v/{{ c.variant }}">{{ c.variant }}</a>（{{ {'ok':'计入统计','failed':'失败','discard':'作废'}.get(c.status, c.status) }}）</dd>
+  <dt>认领时间</dt><dd>{{ fmt_time(c.claimed_at) }}{% if c.history %}，最后由 {{ c.history[-1].by }} 修改{% endif %}</dd>
+  {% endif %}
+  <dt>指标</dt><dd>{% if metrics %}{% for k, v in metrics.items() %}<div><span class="muted">{{ k }}</span> <b>{{ fmt_num(v) }}</b></div>{% endfor %}{% else %}<span class="muted">无</span>{% endif %}
+    {% if c.metrics_source %}<div class="small muted mono">来源 {{ c.metrics_source }}</div>{% endif %}</dd>
+  {% if r.metrics_auto and not c.metrics %}<dt>候选指标</dt><dd class="small">{% for f, kv in r.metrics_auto.items() %}<div class="mono muted">{{ basename(f) }}</div><div>{% for k, v in kv.items() %}{% if loop.index <= 10 %}{{ k }}={{ fmt_num(v) }} {% endif %}{% endfor %}</div>{% endfor %}</dd>{% endif %}
+  <dt>产物</dt><dd>{% if r.artifacts_deleted %}<span class="badge muted">已删除</span> {{ r.artifacts_deleted.at }}（{{ r.artifacts_deleted.reason }}）
+    {% elif r.outputs_summary %}{{ r.outputs_summary.files }} 个文件，{{ human_bytes(r.outputs_summary.bytes) }}（{{ {'copy':'已复制，只读','hardlink':'硬链接','none':'只记清单'}.get(r.outputs_summary.mode, r.outputs_summary.mode) }}）{% else %}<span class="muted">{{ '运行结束后收集' if r.state == 'running' else '无' }}</span>{% endif %}</dd>
+</dl></div>
+</div>
+
+{% if curves %}<h2>曲线</h2><div class="charts">{% for k, svg in curves.items() %}{% if svg %}<div class="box"><div class="lbl">{{ k }}</div>{{ svg | safe }}</div>{% endif %}{% endfor %}</div>{% endif %}
+{% if gpu_chart and (gpu_chart.mem or gpu_chart.util) %}<h2>GPU</h2><div class="charts">
+  {% if gpu_chart.mem %}<div class="box"><div class="lbl">本 Run 显存（GB，横轴分钟）</div>{{ gpu_chart.mem | safe }}</div>{% endif %}
+  {% if gpu_chart.util %}<div class="box"><div class="lbl">所用卡利用率（%）</div>{{ gpu_chart.util | safe }}</div>{% endif %}
+</div>{% endif %}
+
+{% if r.outputs %}<h2>产物 <span class="count">{{ r.outputs_summary.files }}</span></h2>
+<div class="box scroll-x"><table><thead><tr><th>路径</th><th class="num">大小</th><th>修改时间</th><th>保存</th></tr></thead><tbody>
+{% for o in r.outputs[:200] %}<tr><td class="mono small">{{ o.path }}</td><td class="num">{{ human_bytes(o.size) }}</td><td>{{ fmt_time(o.mtime) }}</td><td>{{ o.kept or '-' }}</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+{% if r.inputs %}<h2>读入的大文件 <span class="count">{{ r.inputs|length }}</span></h2>
+<div class="box scroll-x"><table><thead><tr><th>路径</th><th class="num">大小</th><th>指纹</th></tr></thead><tbody>
+{% for o in r.inputs[:100] %}<tr><td class="mono small">{{ o.path }}</td><td class="num">{{ human_bytes(o.size) }}</td><td class="mono small">{{ o.quick_sha256 }}</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+{% if r.log_tail %}<h2>日志尾部</h2><pre class="wrap">{{ r.log_tail[-30:]|join('\n') }}</pre>{% endif %}
+
+{% elif tab == 'code' %}
+{% for s in r.snapshots %}
+<div class="box" style="margin-bottom:12px"><dl class="kv">
+  <dt>目录</dt><dd class="mono">{{ s.root }}（{{ {'git':'git 仓库','dir':'普通目录','files':'零散文件'}.get(s.kind, s.kind) }}）</dd>
+  {% if s.error %}<dt>错误</dt><dd>{{ s.error }}</dd>{% else %}
+  <dt>快照</dt><dd class="mono">{{ s.commit[:12] }} · {{ s.files }} 个文件{% if s.reused %} · 与同时启动的 Run 共用{% endif %}</dd>
+  {% if s.git %}<dt>当时 HEAD</dt><dd class="mono">{{ (s.git.head or '')[:12] }}（{{ s.git.branch }}）{% if s.git.dirty_tracked %} · 有未提交改动{% endif %}{% if s.git.untracked %} · {{ s.git.untracked }} 个 untracked{% endif %}</dd>{% endif %}
+  {% if s.skipped_count %}<dt>未进快照</dt><dd>{{ s.skipped_count }} 个大文件（只记了路径和大小）<details><summary>看列表</summary><div class="small mono">{% for k in s.skipped[:100] %}{{ k.path }} {{ human_bytes(k.size) }}<br>{% endfor %}</div></details></dd>{% endif %}
+  {% if s.note %}<dt>注意</dt><dd>{{ s.note }}</dd>{% endif %}
+  {% endif %}
+  <dt>还原</dt><dd><code>wb restore {{ r.id }}</code> <button class="copy" data-text="wb restore {{ r.id }}">复制</button></dd>
+</dl></div>
+{% endfor %}
+{% for root, patch in patches %}
+<h2>当时未提交的改动 <span class="count mono">{{ root }}</span></h2>
+{% if patch.strip() %}{{ diffblock(patch) }}{% else %}<p class="muted">没有（tracked 文件和 HEAD 一致）</p>{% endif %}
+{% endfor %}
+{% if base %}
+<h2>和 <a class="mono" href="/r/{{ base.id }}">{{ base.id }}</a> 的代码差异
+  {% if siblings|length > 1 %}<span class="count">换一个：{% for s in siblings %}{% if s.id != r.id %}<a class="mono" href="?tab=code&vs={{ s.id }}">{{ s.id[-10:] }}</a> {% endif %}{% endfor %}</span>{% endif %}</h2>
+{% if diff_stat %}<pre>{{ diff_stat }}</pre><div style="height:10px"></div>{{ diffblock(diff) }}{% else %}<p class="muted">代码完全一致</p>{% endif %}
+{% if noise_files %}<details style="margin-top:8px"><summary class="small">另有 {{ noise_files|length }} 个输出 / 日志类文件不同（不算代码改动）</summary><div class="small mono muted">{% for n in noise_files[:200] %}{{ n }}<br>{% endfor %}</div></details>{% endif %}
+{% endif %}
+{% for root, files in (files or {}).items() %}
+<details style="margin-top:18px"><summary>快照里的文件（{{ files|length }}）<span class="mono muted small"> {{ root }}</span></summary>
+<div class="box files" style="margin-top:8px">{% for f in files[:3000] %}<a href="/r/{{ r.id }}/file?root={{ root|urlencode }}&path={{ f.path|urlencode }}" target="_blank">{{ f.path }}</a><br>{% endfor %}</div></details>
+{% endfor %}
+
+{% elif tab == 'logs' %}
+{% for name, label, text in logs %}
+<h2>{{ name }} <span class="count mono">{{ label }}</span></h2>
+<pre class="wrap">{{ text }}</pre>
+{% else %}
+<div class="empty">{% for name, it in (r.stdio or {}).items() %}<p>{{ name }} → <span class="mono">{{ it.tee or it.target }}</span> {{ it.note or '' }}</p>{% endfor %}
+<p>没有可显示的日志。实验输出到终端时无法被记录；以后请让 agent 把输出重定向到日志文件。</p></div>
+{% endfor %}
+
+{% elif tab == 'env' %}
+<div class="box"><dl class="kv">
+  {% set sy = r.system or {} %}
+  <dt>解释器</dt><dd class="mono">{{ r.exe }}{% if sy.python %}（python {{ sy.python }}，prefix {{ sy.prefix }}）{% endif %}</dd>
+  {% if sy.key_packages %}<dt>关键包</dt><dd class="mono small">{% for k, v in sy.key_packages.items() %}{{ k }}=={{ v }}<br>{% endfor %}</dd>{% endif %}
+  <dt>主机</dt><dd>{{ sy.hostname }} · 驱动 {{ sy.nvidia_driver or '-' }} · {{ sy.nvcc or '' }}</dd>
+  {% if sy.gpus %}<dt>GPU</dt><dd class="small">{% for g in sy.gpus %}{{ g.index }}: {{ g.name }}<br>{% endfor %}</dd>{% endif %}
+</dl></div>
+<h2>环境变量 <span class="count">密钥类已脱敏</span></h2>
+<div class="box scroll-x"><table><tbody>{% for k, v in (r.env or {}).items() %}<tr><td class="mono small" style="white-space:nowrap">{{ k }}</td><td class="mono small" style="word-break:break-all">{{ v }}</td></tr>{% endfor %}</tbody></table></div>
+<h2>requirements.txt</h2>
+{% if requirements %}<pre>{{ requirements }}</pre>{% else %}<p class="muted">没有导出（不是 python 进程，或导出失败）</p>{% endif %}
+
+{% elif tab == 'talk' %}
+{% if talk %}
+<p class="sub">{{ link.agent }} 会话 <span class="mono">{{ link.session_id }}</span> · 置信度 {{ link.confidence }} · <span class="mono small">{{ link.file }}</span></p>
+<div class="box talk">
+{% for e in talk %}
+<div class="msg {{ e.role }}{{ ' launch' if e.launch }}">
+  <div class="who">{{ {'user':'👤 你','assistant':'🤖 agent','tool':'🔧 工具调用'}.get(e.role, e.role) }}{% if e.launch %} · 🚀 启动了这个 Run{% endif %} · {{ fmt_time(e.ts_iso) if e.ts_iso else '' }}</div>
+  <div class="text">{{ e.text | truncate(4000, True, ' …') }}</div>
+</div>
+{% endfor %}
+</div>
+{% else %}
+<div class="empty"><p>没有关联到 codex / Claude 对话。可能是在终端里手动启动的，或者启动它的对话不在这台机器上。</p></div>
+{% endif %}
+{% endif %}
+{% endblock %}

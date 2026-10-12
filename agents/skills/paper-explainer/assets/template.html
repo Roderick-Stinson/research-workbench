@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{PAPER_SHORT_TITLE}} · 论文精读</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+<style>
+:root{
+  --bg:#f7f7f5; --card:#ffffff; --fg:#1f2328; --muted:#656d76; --border:#e3e3df;
+  --accent:#3b5bdb; --accent-soft:#edf2ff;
+  --red:#e03131; --red-soft:#fff0f0; --green:#2f9e44; --green-soft:#ebfbee;
+  --amber:#e8590c; --amber-soft:#fff4e6; --violet:#7048e8; --violet-soft:#f3f0ff;
+  --teal:#0c8599; --teal-soft:#e3fafc;
+  --radius:12px; --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#141517; --card:#1c1d20; --fg:#e6e6e6; --muted:#9aa0a6; --border:#2c2e33;
+  --accent:#748ffc; --accent-soft:#1f2440; --red:#ff6b6b; --red-soft:#3a1d1d;
+  --green:#51cf66; --green-soft:#1a2e1f; --amber:#ffa94d; --amber-soft:#3a2a17;
+  --violet:#9775fa; --violet-soft:#261f3d; --teal:#3bc9db; --teal-soft:#13292d;
+}}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);line-height:1.75;font-size:16px}
+a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
+code{font-family:var(--mono);font-size:.9em;background:var(--accent-soft);padding:1px 5px;border-radius:4px}
+
+/* progress + layout */
+#progress{position:fixed;top:0;left:0;height:3px;background:var(--accent);width:0;z-index:50;transition:width .15s}
+.layout{display:grid;grid-template-columns:260px 1fr;max-width:1280px;margin:0 auto}
+nav.toc{position:sticky;top:0;height:100vh;overflow:auto;padding:28px 18px;border-right:1px solid var(--border)}
+nav.toc .brand{font-weight:700;font-size:14px;margin-bottom:4px}
+nav.toc .sub{font-size:12px;color:var(--muted);margin-bottom:18px}
+nav.toc a{display:flex;gap:10px;align-items:flex-start;padding:7px 10px;border-radius:8px;color:var(--muted);font-size:13.5px;line-height:1.4}
+nav.toc a:hover{background:var(--accent-soft);text-decoration:none;color:var(--fg)}
+nav.toc a.active{background:var(--accent-soft);color:var(--accent);font-weight:600}
+nav.toc .n{flex:none;width:22px;height:22px;border-radius:50%;border:1.5px solid currentColor;display:grid;place-items:center;font-size:11px;font-weight:700}
+nav.toc .mode{margin-top:20px;display:flex;gap:6px}
+nav.toc button,.stepnav button{font:inherit;font-size:12.5px;padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--fg);cursor:pointer}
+nav.toc button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+main{padding:36px 48px 120px;min-width:0}
+@media (max-width:900px){.layout{grid-template-columns:1fr}nav.toc{display:none}main{padding:20px 16px 80px}}
+
+/* hero */
+.hero{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:30px 34px;margin-bottom:28px}
+.hero .venue{display:inline-block;font-size:12px;font-weight:600;color:var(--accent);background:var(--accent-soft);padding:2px 10px;border-radius:99px}
+.hero h1{font-size:26px;line-height:1.35;margin:12px 0 6px}
+.hero .authors{color:var(--muted);font-size:14px}
+.hero .tldr{margin-top:16px;padding:14px 16px;border-left:4px solid var(--accent);background:var(--accent-soft);border-radius:0 8px 8px 0}
+.hero .tldr b{color:var(--accent)}
+
+/* step sections */
+section.step{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:30px 34px;margin-bottom:28px;scroll-margin-top:20px}
+section.step > header{display:flex;gap:14px;align-items:center;margin-bottom:6px}
+section.step > header .badge{flex:none;width:38px;height:38px;border-radius:10px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:800}
+section.step > header h2{margin:0;font-size:21px;line-height:1.35}
+section.step > .q{color:var(--muted);font-size:14px;margin:0 0 18px 52px}
+h3{font-size:17px;margin:26px 0 8px}
+h4{font-size:15px;margin:18px 0 6px}
+body.stepmode section.step{display:none}
+body.stepmode section.step.current{display:block}
+.stepnav{display:flex;justify-content:space-between;margin-top:26px;padding-top:16px;border-top:1px dashed var(--border)}
+
+/* callouts */
+.callout{border-radius:10px;padding:14px 18px;margin:16px 0;border:1px solid transparent}
+.callout .t{font-weight:700;font-size:13.5px;margin-bottom:4px;letter-spacing:.02em}
+.callout.info{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 25%,transparent)} .callout.info .t{color:var(--accent)}
+.callout.warn{background:var(--red-soft);border-color:color-mix(in srgb,var(--red) 25%,transparent)} .callout.warn .t{color:var(--red)}
+.callout.good{background:var(--green-soft);border-color:color-mix(in srgb,var(--green) 25%,transparent)} .callout.good .t{color:var(--green)}
+.callout.idea{background:var(--violet-soft);border-color:color-mix(in srgb,var(--violet) 25%,transparent)} .callout.idea .t{color:var(--violet)}
+.callout.key{background:var(--amber-soft);border-color:color-mix(in srgb,var(--amber) 25%,transparent)} .callout.key .t{color:var(--amber)}
+
+/* logic chain: problem -> root cause -> direct fix -> idea */
+.chain{display:flex;flex-wrap:wrap;gap:0;align-items:stretch;margin:18px 0}
+.chain .node{flex:1 1 170px;padding:12px 14px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg);font-size:14px}
+.chain .node .lbl{font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px}
+.chain .arrow{flex:none;align-self:center;padding:0 6px;color:var(--muted);font-size:20px}
+.chain .p{border-color:var(--red)} .chain .p .lbl{color:var(--red)}
+.chain .r{border-color:var(--amber)} .chain .r .lbl{color:var(--amber)}
+.chain .f{border-color:var(--teal)} .chain .f .lbl{color:var(--teal)}
+.chain .i{border-color:var(--violet)} .chain .i .lbl{color:var(--violet)}
+
+/* existing work categories */
+.cats{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin:14px 0}
+.cat{border:1px solid var(--border);border-radius:10px;padding:16px 18px;background:var(--bg)}
+.cat h4{margin:0 0 4px}
+.cat .idea{font-size:14px;color:var(--muted);margin-bottom:8px}
+.cat ul{margin:6px 0 8px;padding-left:18px;font-size:14px}
+.cat .miss{font-size:13.5px;border-top:1px dashed var(--border);padding-top:8px;color:var(--red)}
+.cat .miss::before{content:"✗ 未考虑："; font-weight:700}
+.cite{font-size:.82em;font-weight:600;vertical-align:baseline;color:var(--accent)}
+
+/* tables */
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px}
+th,td{border:1px solid var(--border);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:var(--bg);font-weight:600}
+td.ok{color:var(--green);font-weight:700;text-align:center} td.no{color:var(--red);font-weight:700;text-align:center} td.part{color:var(--amber);font-weight:700;text-align:center}
+.tbl-wrap{overflow-x:auto}
+
+/* formula explanation */
+.formula{border:1px solid var(--border);border-radius:10px;margin:18px 0;overflow:hidden}
+.formula .eq{padding:14px 18px;background:var(--bg);overflow-x:auto;position:relative}
+.formula .eq .tag{position:absolute;top:8px;right:12px;font-size:12px;color:var(--muted);font-family:var(--mono)}
+.formula .ex{padding:4px 18px 14px}
+.formula .ex table{font-size:13.5px}
+.formula .ex td:first-child{white-space:nowrap;width:1%}
+.formula .row-lhs td{background:var(--accent-soft)}
+.formula .why{font-size:14px;padding:10px 14px;border-radius:8px;background:var(--violet-soft);margin-top:8px}
+.formula .why b{color:var(--violet)}
+
+/* figures */
+figure.fig{margin:20px 0;padding:18px;border:1px solid var(--border);border-radius:10px;background:var(--bg)}
+figure.fig svg{width:100%;height:auto;display:block}
+figure.fig figcaption{font-size:13px;color:var(--muted);margin-top:10px;text-align:center}
+svg text{font-family:var(--sans);fill:var(--fg)}
+svg .box{fill:var(--card);stroke:var(--border);stroke-width:1.5}
+svg .box-accent{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.5}
+svg .box-red{fill:var(--red-soft);stroke:var(--red);stroke-width:1.5}
+svg .box-green{fill:var(--green-soft);stroke:var(--green);stroke-width:1.5}
+svg .box-amber{fill:var(--amber-soft);stroke:var(--amber);stroke-width:1.5}
+svg .box-violet{fill:var(--violet-soft);stroke:var(--violet);stroke-width:1.5}
+svg .line{stroke:var(--muted);stroke-width:1.5;fill:none}
+svg .line-red{stroke:var(--red);stroke-width:2;fill:none;stroke-dasharray:5 4}
+svg .line-accent{stroke:var(--accent);stroke-width:2;fill:none}
+svg .muted{fill:var(--muted)} svg .red{fill:var(--red)} svg .green{fill:var(--green)} svg .accent{fill:var(--accent)} svg .violet{fill:var(--violet)}
+
+/* claims */
+.claims{counter-reset:c;list-style:none;padding:0;margin:14px 0}
+.claims li{counter-increment:c;position:relative;padding:12px 14px 12px 56px;border:1px solid var(--border);border-radius:10px;margin-bottom:10px;background:var(--bg)}
+.claims li::before{content:"C" counter(c);position:absolute;left:14px;top:12px;font-weight:800;color:var(--violet);font-family:var(--mono)}
+.claims li .ev{display:block;font-size:13px;color:var(--muted);margin-top:4px}
+.pill{display:inline-block;font-size:11.5px;font-weight:600;padding:1px 8px;border-radius:99px;background:var(--violet-soft);color:var(--violet);margin-right:4px}
+.pill.g{background:var(--green-soft);color:var(--green)} .pill.r{background:var(--red-soft);color:var(--red)} .pill.a{background:var(--amber-soft);color:var(--amber)}
+
+/* references */
+ol.refs{font-size:13.5px;padding-left:28px} ol.refs li{margin-bottom:6px;scroll-margin-top:20px}
+ol.refs li:target{background:var(--amber-soft);border-radius:6px}
+.fn{font-size:12.5px;color:var(--muted)}
+
+/* ===== 强调：加粗 + 变色 + 背景高亮（不要只用裸加粗） ===== */
+section.step b,.hero b,.chain b{font-weight:700;color:var(--accent);background:var(--accent-soft);padding:0 5px;border-radius:4px}
+section.step b.r,.hero b.r{color:var(--red);background:var(--red-soft)}
+section.step b.g,.hero b.g{color:var(--green);background:var(--green-soft)}
+section.step b.v,.hero b.v{color:var(--violet);background:var(--violet-soft)}
+section.step b.a,.hero b.a{color:var(--amber);background:var(--amber-soft)}
+section.step b.t,.hero b.t{color:var(--teal);background:var(--teal-soft)}
+/* ===== 分点列表 ===== */
+ul.pts{list-style:none;padding:0;margin:10px 0}
+ul.pts>li{position:relative;padding:6px 0 6px 22px;border-bottom:1px dashed var(--border)}
+ul.pts>li:last-child{border-bottom:none}
+ul.pts>li::before{content:"";position:absolute;left:4px;top:15px;width:8px;height:8px;border-radius:2px;background:var(--accent)}
+ul.pts.r>li::before{background:var(--red)} ul.pts.g>li::before{background:var(--green)} ul.pts.v>li::before{background:var(--violet)} ul.pts.a>li::before{background:var(--amber)}
+ul.pts li ul{margin:4px 0 2px;padding-left:18px;font-size:14.5px;color:var(--muted)}
+.callout ul{margin:4px 0;padding-left:20px}
+/* ===== 卡片网格 ===== */
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px;margin:14px 0}
+.card{border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:var(--bg);font-size:14.5px}
+.card h4{margin:0 0 6px} .card ul{margin:4px 0;padding-left:18px}
+.card.r{border-top:3px solid var(--red)} .card.g{border-top:3px solid var(--green)} .card.v{border-top:3px solid var(--violet)} .card.a{border-top:3px solid var(--amber)} .card.t{border-top:3px solid var(--teal)} .card.b{border-top:3px solid var(--accent)}
+/* ===== 公式解读：整体读法 / 设计理由都用分点 ===== */
+.formula .ex td ul{margin:2px 0;padding-left:18px}
+.formula .why .wl{font-weight:700;color:var(--violet);margin-bottom:2px}
+.formula .why ul{margin:2px 0;padding-left:18px}
+/* ===== 图表配色 ===== */
+svg .amber{fill:var(--amber)} svg .teal{fill:var(--teal)}
+svg .f-accent{fill:var(--accent)} svg .f-red{fill:var(--red)} svg .f-green{fill:var(--green)} svg .f-violet{fill:var(--violet)} svg .f-amber{fill:var(--amber)} svg .f-teal{fill:var(--teal)} svg .f-muted{fill:var(--muted);opacity:.55}
+svg .grid{stroke:var(--border);stroke-width:1}
+svg .line-violet{stroke:var(--violet);stroke-width:2;fill:none} svg .line-green{stroke:var(--green);stroke-width:2;fill:none} svg .line-amber{stroke:var(--amber);stroke-width:2;fill:none}
+svg .line-dash{stroke:var(--muted);stroke-width:1.5;fill:none;stroke-dasharray:5 4}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div class="layout">
+<nav class="toc">
+  <div class="brand">{{PAPER_SHORT_TITLE}}</div>
+  <div class="sub">论文精读 · 8 步拆解</div>
+  <a href="#s1"><span class="n">1</span>为什么研究 / 重要性</a>
+  <a href="#s2"><span class="n">2</span>现有工作分类</a>
+  <a href="#s3"><span class="n">3</span>现有工作的问题</a>
+  <a href="#s4"><span class="n">4</span>问题的根因</a>
+  <a href="#s5"><span class="n">5</span>最直接的解法</a>
+  <a href="#s6"><span class="n">6</span>Idea 具体怎么做</a>
+  <a href="#s7"><span class="n">7</span>预期效果 / Claims</a>
+  <a href="#s8"><span class="n">8</span>实验设计</a>
+  <a href="#refs"><span class="n">R</span>参考文献</a>
+  <div class="mode">
+    <button id="m-scroll" class="on">全文模式</button>
+    <button id="m-step">逐步模式</button>
+  </div>
+  <div class="sub" style="margin-top:8px">逐步模式下用 ← → 翻页</div>
+</nav>
+
+<main>
+<!-- ================= HERO ================= -->
+<div class="hero">
+  <span class="venue">{{VENUE_YEAR}}</span>
+  <h1>{{PAPER_FULL_TITLE}}</h1>
+  <div class="authors">{{AUTHORS}} · <a href="{{PAPER_URL}}" target="_blank">论文链接</a></div>
+  <div class="tldr"><b>一句话总结：</b>{{TLDR}}</div>
+  <!-- 全文逻辑链，贯穿 Step 3→6 -->
+  <div class="chain">
+    <div class="node p"><div class="lbl">问题</div>{{PROBLEM_ONE_LINE}}</div><div class="arrow">→</div>
+    <div class="node r"><div class="lbl">根因</div>{{ROOT_CAUSE_ONE_LINE}}</div><div class="arrow">→</div>
+    <div class="node f"><div class="lbl">直接解法</div>{{DIRECT_FIX_ONE_LINE}}</div><div class="arrow">→</div>
+    <div class="node i"><div class="lbl">本文 Idea</div>{{IDEA_ONE_LINE}}</div>
+  </div>
+</div>
+
+<!-- ================= STEP 1 ================= -->
+<section class="step" id="s1">
+  <header><div class="badge">1</div><h2>为什么要研究这个问题？它为什么重要？</h2></header>
+  <p class="q">背景 → 任务定义 → 现实意义 / 影响面</p>
+  {{STEP1_CONTENT}}
+</section>
+
+<!-- ================= STEP 2 ================= -->
+<section class="step" id="s2">
+  <header><div class="badge">2</div><h2>现有工作主要分为哪几类？</h2></header>
+  <p class="q">每类：核心思路 + 代表工作（带引用）+ 未考虑的问题</p>
+  <!-- COMPONENT: category card
+  <div class="cats">
+    <div class="cat">
+      <h4>类别 A：xxx</h4>
+      <div class="idea">核心思路一句话</div>
+      <ul><li>Method-X <a class="cite" href="#ref-3">[3]</a>：做了什么</li></ul>
+      <div class="miss">这类方法没考虑到的点（与 Step 3 的问题对应）</div>
+    </div>
+  </div> -->
+  {{STEP2_CONTENT}}
+</section>
+
+<!-- ================= STEP 3 ================= -->
+<section class="step" id="s3">
+  <header><div class="badge">3</div><h2>现有工作存在什么问题？</h2></header>
+  <p class="q">按"问题"而非按"方法"梳理 → 结论：都没考虑到 X → 引出本文问题</p>
+  <!-- COMPONENT: problem-vs-method matrix: rows = methods/categories, cols = 关键问题维度; td.ok ✓ / td.no ✗ / td.part △ -->
+  <!-- COMPONENT: figure.fig > svg 问题示意图（必须有） -->
+  {{STEP3_CONTENT}}
+</section>
+
+<!-- ================= STEP 4 ================= -->
+<section class="step" id="s4">
+  <header><div class="badge">4</div><h2>这个问题的根因是什么？</h2></header>
+  <p class="q">从现象追到机制：为什么现有方法在结构上必然出这个问题</p>
+  {{STEP4_CONTENT}}
+</section>
+
+<!-- ================= STEP 5 ================= -->
+<section class="step" id="s5">
+  <header><div class="badge">5</div><h2>最直接的解决办法是什么？</h2></header>
+  <p class="q">针对根因的最朴素解法 → 朴素解法的难点 → 本文如何落地</p>
+  {{STEP5_CONTENT}}
+</section>
+
+<!-- ================= STEP 6 ================= -->
+<section class="step" id="s6">
+  <header><div class="badge">6</div><h2>Idea 具体怎么做？</h2></header>
+  <p class="q">整体框架图 → 逐模块拆解 → 每个公式：左边是什么 / 右边每一项 / 取值范围 / 为什么这样设计</p>
+  <!-- COMPONENT: formula explanation (每个核心公式都用这个)
+  <div class="formula">
+    <div class="eq"><span class="tag">Eq. (3)</span>$$ A_t = r_t + \gamma V(s_{t+1}) - V(s_t) $$</div>
+    <div class="ex"><table>
+      <tr class="row-lhs"><td>左边 $A_t$</td><td>含义：…… 取值范围：$(-\infty,+\infty)$，>0 表示……</td></tr>
+      <tr><td>$r_t$</td><td>含义 …… 范围 ……</td></tr>
+      <tr><td>$\gamma$</td><td>含义 …… 范围 $[0,1]$</td></tr>
+      <tr><td>等式整体</td><td>左右两边连起来读：…… 直觉 / 极端情况举例</td></tr>
+    </table>
+    <div class="why"><b>为什么这样设计：</b>…… 换成 xxx 会怎样</div></div>
+  </div> -->
+  {{STEP6_CONTENT}}
+</section>
+
+<!-- ================= STEP 7 ================= -->
+<section class="step" id="s7">
+  <header><div class="badge">7</div><h2>这个 Idea 预期能达到什么效果？（Claims）</h2></header>
+  <p class="q">每一条 Claim 都是实验要证明的结论；Step 8 会逐条对应</p>
+  <!-- COMPONENT:
+  <ol class="claims">
+    <li><b>有效性：</b>……<span class="ev"><span class="pill">→ 实验 E1</span>主结果表 Tab.1</span></li>
+  </ol> -->
+  {{STEP7_CONTENT}}
+</section>
+
+<!-- ================= STEP 8 ================= -->
+<section class="step" id="s8">
+  <header><div class="badge">8</div><h2>实验如何设计？</h2></header>
+  <p class="q">数据集 / Baselines / 评测指标(critic) 的选择理由（follow 前人设定）+ Claim ↔ 实验 对应矩阵</p>
+  {{STEP8_CONTENT}}
+</section>
+
+<!-- ================= REFERENCES ================= -->
+<section class="step" id="refs">
+  <header><div class="badge">R</div><h2>参考文献</h2></header>
+  <p class="q">编号与正文 [n] 对应；均取自原论文参考文献</p>
+  <ol class="refs">
+    <!-- <li id="ref-1">Author et al. <i>Title</i>. Venue, Year. <a href="...">link</a></li> -->
+    {{REFERENCES}}
+  </ol>
+</section>
+</main>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded",()=>{
+  if(window.renderMathInElement){renderMathInElement(document.body,{delimiters:[
+    {left:"$$",right:"$$",display:true},{left:"\\[",right:"\\]",display:true},
+    {left:"$",right:"$",display:false},{left:"\\(",right:"\\)",display:false}],throwOnError:false});}
+  const steps=[...document.querySelectorAll("section.step")];
+  const links=[...document.querySelectorAll("nav.toc a")];
+  const prog=document.getElementById("progress");
+  let cur=0;
+  // add prev/next nav to each step
+  steps.forEach((s,i)=>{const d=document.createElement("div");d.className="stepnav";
+    d.innerHTML=`<button ${i==0?"disabled":""} data-go="${i-1}">← 上一步</button><button ${i==steps.length-1?"disabled":""} data-go="${i+1}">下一步 →</button>`;
+    s.appendChild(d);});
+  function setActive(i){cur=i;links.forEach((a,j)=>a.classList.toggle("active",j===i));}
+  function show(i){if(i<0||i>=steps.length)return;setActive(i);
+    if(document.body.classList.contains("stepmode")){steps.forEach((s,j)=>s.classList.toggle("current",j===i));window.scrollTo(0,0);prog.style.width=((i+1)/steps.length*100)+"%";}
+    else steps[i].scrollIntoView({behavior:"smooth"});}
+  document.addEventListener("click",e=>{const g=e.target.closest("[data-go]");if(g)show(+g.dataset.go);});
+  links.forEach((a,i)=>a.addEventListener("click",e=>{if(document.body.classList.contains("stepmode")){e.preventDefault();show(i);}}));
+  const bS=document.getElementById("m-scroll"),bP=document.getElementById("m-step");
+  bS.onclick=()=>{document.body.classList.remove("stepmode");bS.classList.add("on");bP.classList.remove("on");steps.forEach(s=>s.classList.remove("current"));show(cur);};
+  bP.onclick=()=>{document.body.classList.add("stepmode");bP.classList.add("on");bS.classList.remove("on");show(cur);};
+  document.addEventListener("keydown",e=>{if(!document.body.classList.contains("stepmode"))return;
+    if(e.key==="ArrowRight")show(cur+1);if(e.key==="ArrowLeft")show(cur-1);});
+  window.addEventListener("scroll",()=>{if(document.body.classList.contains("stepmode"))return;
+    const h=document.documentElement;prog.style.width=(h.scrollTop/(h.scrollHeight-h.clientHeight)*100)+"%";
+    let a=0;steps.forEach((s,i)=>{if(s.getBoundingClientRect().top<140)a=i;});setActive(a);});
+  setActive(0);
+});
+</script>
+</body>
+</html>

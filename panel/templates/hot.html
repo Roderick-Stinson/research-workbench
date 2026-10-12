@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}热点 · 实验工作台{% endblock %}
+{% block body %}
+<h1>热点榜</h1>
+<p class="sub">近 {{ h.window_hours or 72 }} 小时，按关注度（HF 点赞、Hacker News 讨论、独立来源数）排序 · {{ fmt_time(h.generated_at) }}</p>
+{% if items %}
+<div class="box">{% for r in items %}
+<div class="inbox-item"><div><b>{{ loop.index }}.</b> <a href="/paper/{{ r.pid }}">{{ r.title }}</a>
+  <div class="small muted">{{ r.one_liner or '' }}</div></div>
+  <div class="meta"><span>关注度 {{ r.heat }}</span><span>🤗 {{ r.hf_upvotes }}</span><span>HN {{ r.hn_points }} / {{ r.hn_comments }} 评论</span>{% for l in r.hn_links %}<a href="{{ l }}" target="_blank">讨论</a>{% endfor %}<span>{{ r.sources_n }} 个来源</span></div></div>
+{% endfor %}</div>
+{% else %}<div class="empty"><p>近期没有明显的讨论热度。</p></div>{% endif %}
+{% endblock %}

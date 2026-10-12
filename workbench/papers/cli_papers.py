@@ -1,0 +1,345 @@
+"""wb 的论文侧子命令（ADR-0022：面板只读，反馈全部由 agent 调用这些命令）。"""
+from __future__ import annotations
+
+import json
+
+from .. import store as wbstore
+from ..util import now_iso
+from . import field as fieldmod
+from . import ids, pipeline, store
+
+
+def out_json(x):
+    print(json.dumps(x, ensure_ascii=False, indent=2, default=str))
+
+
+def resolve_pid(s: str) -> str:
+    s = s.strip()
+    if store.load(s):
+        return s
+    a = ids.arxiv_id(s)
+    if a and store.load(f"arxiv-{a}"):
+        return f"arxiv-{a}"
+    hits = [p for p in store.all_ids() if s.lower() in p.lower()]
+    if len(hits) == 1:
+        return hits[0]
+    if not hits:
+        nt = ids.norm_title(s)
+        hits = [m["id"] for m in store.all_papers() if nt and nt in ids.norm_title(m.get("title"))]
+        if len(hits) == 1:
+            return hits[0]
+    raise SystemExit(f"找不到论文：{s}" if not hits else f"'{s}' 匹配到多篇：{', '.join(hits[:8])}")
+
+
+# ---------------- daily / backfill ----------------
+
+
+def cmd_daily(a):
+    if a.action == "run":
+        iss = pipeline.run(a.date, [x for x in (a.steps or "").split(",") if x] or None)
+        bad = {k: v["status"] for k, v in iss["steps"].items() if v["status"] != "ok"}
+        print(f"完成：精选 {len(iss['picks'])} 篇，新收录 {len(iss.get('new') or [])} 篇" + (f"；未成功：{bad}" if bad else ""))
+    elif a.action == "push":
+        print(pipeline.push(a.date, force=a.force))
+    elif a.action == "resume":
+        print(pipeline.resume())
+    elif a.action == "status":
+        iss = pipeline.load_issue(a.date or store.today())
+        if a.json:
+            return out_json(iss)
+        from . import llm
+        print(f"{iss['day']}  精选 {len(iss.get('picks') or [])}  新收录 {len(iss.get('new') or [])}  "
+              f"已推送 {len(iss.get('pushed') or [])} 次")
+        from . import quota
+        st = llm.block_state()
+        model = llm.creds().get("WB_LLM_MODEL") or ""
+        print(f"  批量模型 {model}：{quota.describe(quota.snapshot(), model)}"
+              + (f"；⏸ {st['reason']}，预计 {st['until_text']} 恢复" if st else ""))
+        for k, v in (iss.get("steps") or {}).items():
+            print(f"  {k:10} {v.get('status'):8} {v.get('seconds', '')}s  {v.get('error', '') or v.get('stats', '')}")
+
+
+def cmd_backfill(a):
+    import fcntl
+
+    from .. import config
+    lock = open(config.home() / "daemon" / "daily.lock", "a")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        raise SystemExit("每日流程正在运行，等它结束再回填（共用 daemon/daily.lock）")
+    from . import llm
+    try:
+        res = pipeline.backfill(a.months, judge_only=a.judge_only)
+    except llm.LLMPaused as e:
+        print(f"回填暂停：{e}（进度都已保存，下次 wb backfill 从这里继续）")
+        return
+    print(res)
+
+
+# ---------------- paper ----------------
+
+
+def _row(m):
+    qr = m.get("_qr") or {}
+    st = m.get("_status") or {}
+    flags = "".join(c for c, k in (("★", "fav"), ("✓", "read"), ("✗", "irrelevant"), ("⟳", "reproduce")) if st.get(k))
+    return [m["id"], (m.get("published") or "")[:10], (m.get("picked") or {}).get("day", ""), flags,
+            (qr.get("title_zh") or m.get("title") or "")[:70]]
+
+
+def cmd_paper(a):
+    from ..cli import table
+
+    if a.action == "ls":
+        ps = [m for m in store.all_papers() if m.get("intake", {}).get("state") == "relevant"]
+        if a.picked:
+            ps = [m for m in ps if m.get("picked")]
+        if a.day:
+            ps = [m for m in ps if (m.get("picked") or {}).get("day") == a.day or m.get("discovered_day") == a.day]
+        if a.q:
+            q = a.q.lower()
+            ps = [m for m in ps if q in (m.get("title") or "").lower() or q in (m.get("abstract") or "").lower()
+                  or q in json.dumps(m.get("_qr") or {}, ensure_ascii=False).lower()]
+        for fv in a.facet or []:
+            k, v = fv.split("=", 1)
+            ps = [m for m in ps if any(v in x for x in ((m.get("_qr") or {}).get("facets") or {}).get(k, []))]
+        ps.sort(key=lambda m: m.get("published") or "", reverse=True)
+        ps = ps[: a.limit]
+        if a.json:
+            return out_json([dict({k: v for k, v in m.items() if not k.startswith("_")}, quickread=m.get("_qr")) for m in ps])
+        table([_row(m) for m in ps], ["论文", "发表", "精选日", "标记", "标题"])
+    elif a.action == "show":
+        pid = resolve_pid(a.ids[0])
+        m = store.load(pid)
+        qr = store.load_quickread(pid) or {}
+        st = store.load_status(pid)
+        if a.json:
+            return out_json({"meta": m, "quickread": qr, "status": st})
+        print(f"{pid}  {m.get('title')}")
+        print(f"  {qr.get('title_zh', '')}")
+        print(f"  发表 {m.get('published')}  会议 {m.get('venue') or '-'}  代码 {', '.join(m.get('code_urls') or []) or '-'}")
+        print(f"  来源 {', '.join(sorted({s['name'] for s in m.get('sources', [])}))}  引用种子 {m.get('cites_seeds') or '-'}")
+        print(f"  收录 {m.get('intake')}")
+        if qr:
+            print(f"  一句话：{qr.get('one_liner')}")
+            for k, lab in (("problem", "问题"), ("method", "方法"), ("results", "结果"), ("limitations", "局限")):
+                print(f"  {lab}：{(qr.get('quickread') or {}).get(k)}")
+            print(f"  标签：{qr.get('facets')}")
+            print(f"  质量：{qr.get('quality')}")
+        if st:
+            print(f"  我的标记：{ {k: v for k, v in st.items() if k != 'history'} }")
+        if (store.pdir(pid) / "explainer.html").exists():
+            print(f"  精读：{store.pdir(pid) / 'explainer.html'}")
+    elif a.action == "mark":
+        keys = [k for k in ("read", "fav", "irrelevant", "reproduce") if getattr(a, k)]
+        if not keys and not a.note:
+            raise SystemExit("要标什么？--read / --fav / --irrelevant / --reproduce / --note")
+        for x in a.ids:
+            pid = resolve_pid(x)
+            st = store.load_status(pid)
+            for k in keys:
+                if a.undo:
+                    st.pop(k, None)
+                else:
+                    st[k] = now_iso()
+            if a.note:
+                st["note"] = a.note
+            st.setdefault("history", []).append({"ts": now_iso(), "by": wbstore._actor(), "set": keys,
+                                                 "undo": bool(a.undo), "note": a.note})
+            store.save_status(pid, st)
+            wbstore.journal("paper.mark", paper=pid, keys=keys, undo=bool(a.undo))
+            print(f"{pid}：{'取消 ' if a.undo else ''}{'、'.join(keys) or '备注'}")
+
+
+# ---------------- seed / field ----------------
+
+
+def cmd_seed(a):
+    s = fieldmod.seeds()
+    if a.action == "ls":
+        if a.json:
+            return out_json(s)
+        for x in s:
+            print(f"{x['arxiv']:12} {x.get('title', '')[:80]}  （{x.get('why')}）")
+    elif a.action == "add":
+        aid = ids.arxiv_id(a.arxiv) or a.arxiv
+        if any(x["arxiv"] == aid for x in s):
+            raise SystemExit(f"{aid} 已经是种子")
+        m = store.load(f"arxiv-{aid}") or {}
+        s.append({"arxiv": aid, "title": m.get("title") or a.title, "why": a.why, "added_by": wbstore._actor(),
+                  "added_at": now_iso()})
+        fieldmod.save_seeds(s)
+        wbstore.journal("seed.add", arxiv=aid, why=a.why)
+        print(f"已加入种子 {aid}")
+    elif a.action == "rm":
+        aid = ids.arxiv_id(a.arxiv) or a.arxiv
+        fieldmod.save_seeds([x for x in s if x["arxiv"] != aid])
+        wbstore.journal("seed.rm", arxiv=aid)
+        print(f"已移除种子 {aid}")
+
+
+def cmd_field(a):
+    if a.action == "init":
+        if not a.kv:
+            raise SystemExit("用法：wb field init <examples/fields/xxx.json 或示例名，如 mas-arch-opt>")
+        print(fieldmod.init_from(a.kv[0]))
+        wbstore.journal("field.init", source=a.kv[0])
+        return
+    f = fieldmod.field()
+    if a.action == "show":
+        return out_json(f)
+    for kv in a.kv:
+        k, v = kv.split("=", 1)
+        try:
+            v = json.loads(v)
+        except ValueError:
+            pass
+        cur = f
+        parts = k.split(".")
+        for p in parts[:-1]:
+            cur = cur.setdefault(p, {})
+        cur[parts[-1]] = v
+    fieldmod.save_field(f)
+    wbstore.journal("field.set", fields=a.kv)
+    print("已更新研究方向配置")
+
+
+# ---------------- idea / problem / map / results / report ----------------
+
+
+def cmd_idea(a):
+    from . import ideate
+    from ..cli import table
+    from ..util import read_json
+
+    if a.action == "ls":
+        its = ideate.all_ideas(include_hidden=a.hidden)
+        if a.json:
+            return out_json(its)
+        table([[i["id"], i.get("status"), i.get("score"), (i.get("title") or "")[:60], i.get("problem_id") or "",
+                "隐藏" if not i.get("informed") else ""] for i in its], ["IDEA", "状态", "均分", "标题", "问题", ""])
+    elif a.action == "show":
+        d = ideate.ideas_dir() / a.id
+        if not d.exists():
+            d = ideate.ideas_dir() / ".hidden" / a.id
+        out_json({"idea": read_json(d / "idea.json"), "candidate": read_json(d / "candidate.json"),
+                  "review": read_json(d / "review.json"), "doc": str(d / "idea.html") if (d / "idea.html").exists() else None})
+    elif a.action == "delete":
+        if not a.reason:
+            raise SystemExit("删除 IDEA 只能在本人明确要求时做（ADR-0024）：用 --reason 写下本人的原话")
+        ideate.delete(a.id, a.reason)
+        print(f"已删除 {a.id}（移到 ideas/.deleted/，可恢复）")
+    elif a.action in ("verify", "abandon", "promote", "note"):
+        status = {"verify": "verifying", "abandon": "abandoned", "promote": "claim", "note": "noted"}[a.action]
+        if a.action == "abandon" and not a.reason:
+            raise SystemExit("放弃要写原因（--reason），以后能看到为什么没走这条路")
+        it = ideate.set_status(a.id, status, note=a.reason, link=a.claim)
+        print(f"{a.id} → {it['status']}" + (f"（{a.claim}）" if a.claim else ""))
+
+
+def cmd_problem(a):
+    from . import ideate
+
+    ps = ideate.all_problems()
+    if a.json:
+        return out_json(ps)
+    for p in ps:
+        print(f"{p['id']}  {p.get('title')}  （{p.get('source')}，IDEA {len(p.get('ideas') or [])} 个，文档{'✓' if p.get('doc') else '✗'}）")
+
+
+def cmd_map(a):
+    from . import fieldmap
+
+    if a.action == "show":
+        m = fieldmap.load(a.version)
+        if not m:
+            raise SystemExit("还没有领域地图（每日流程会在第一次运行时生成，或 wb map rebuild）")
+        if a.json:
+            return out_json(m)
+        print(f"领域地图 v{m['version']}（{m.get('n_papers')} 篇，{m.get('created_at')}）\n{m.get('overview', '')}\n")
+        for c in m["primary"]["categories"]:
+            print(f"[{c['id']}] {c['name']}（{len(c.get('members') or [])} 篇）：{c.get('idea')}")
+            print(f"     没考虑到：{c.get('missing')}")
+    elif a.action == "versions":
+        for v in fieldmap.versions():
+            print(v)
+    elif a.action == "rebuild":
+        print(fieldmap.rebuild())
+
+
+def cmd_results(a):
+    from . import results
+
+    rows = results.all_rows()
+    if not a.task:
+        bs = results.benchmarks(rows)
+        return out_json(bs) if a.json else [print(f"{t:24} {n} 篇") for t, n in bs]
+    t = results.table(results.norm_task(a.task), rows)
+    if a.json:
+        return out_json(t)
+    for g in t["groups"]:
+        print(f"\n== {t['task']} · {g['metric']} · {g['backbone']}")
+        for r in g["rows"][:30]:
+            print(f"  {'*' if r['is_proposed'] else ' '} {r['value']:>8}  {r['method'][:30]:30}  {r['pid']}  {r.get('where') or ''}")
+
+
+def cmd_report(a):
+    from . import reports
+
+    if a.action == "build":
+        r = reports.build(a.period, a.key)
+        print(f"已生成 {a.period} {r['key']}：新收录 {r['n_new']}，精选 {r['n_picks']}")
+    elif a.action == "hot":
+        out_json(reports.hot(store.today()))
+    else:
+        keys = reports.list_reports(a.period)
+        out_json(reports.load_report(a.period, a.key or (keys[0] if keys else "")) or {"error": "没有报告"})
+
+
+def register(add):
+    p = add("daily", cmd_daily, "每日论文流程：run / push / status")
+    p.add_argument("action", choices=["run", "push", "status", "resume"])
+    p.add_argument("--date", help="期号日期 YYYY-MM-DD（默认今天，北京时间）")
+    p.add_argument("--steps", help="只跑这些步骤，逗号分隔")
+    p.add_argument("--force", action="store_true")
+    p = add("backfill", cmd_backfill, "首次回填：引用 baseline 的论文 + arXiv 近 N 个月")
+    p.add_argument("--months", type=int, default=12)
+    p.add_argument("--judge-only", action="store_true", help="不抓取，只对库里待判定的做判定和速读")
+    p = add("paper", cmd_paper, "论文：ls / show / mark")
+    p.add_argument("action", choices=["ls", "show", "mark"])
+    p.add_argument("ids", nargs="*")
+    p.add_argument("--picked", action="store_true")
+    p.add_argument("--day")
+    p.add_argument("--q")
+    p.add_argument("--facet", action="append", help="维度筛选 key=value")
+    p.add_argument("--limit", type=int, default=50)
+    for k, h in (("read", "已读"), ("fav", "收藏"), ("irrelevant", "不相关（负样本）"), ("reproduce", "想复现")):
+        p.add_argument(f"--{k}", action="store_true", help=h)
+    p.add_argument("--undo", action="store_true")
+    p.add_argument("--note")
+    p = add("seed", cmd_seed, "种子论文：ls / add / rm")
+    p.add_argument("action", choices=["ls", "add", "rm"])
+    p.add_argument("arxiv", nargs="?")
+    p.add_argument("--why", default="本人指定")
+    p.add_argument("--title")
+    p = add("idea", cmd_idea, "IDEA：ls / show / verify / abandon / promote / note / delete（删除只在本人要求时）")
+    p.add_argument("action", choices=["ls", "show", "verify", "abandon", "promote", "note", "delete"])
+    p.add_argument("id", nargs="?")
+    p.add_argument("--hidden", action="store_true", help="包括没通过评审的")
+    p.add_argument("--reason")
+    p.add_argument("--claim", help="promote：升级成的 claim，如 mypaper/C2")
+    add("problem", cmd_problem, "列出问题 Problem")
+    p = add("map", cmd_map, "领域地图：show / versions / rebuild")
+    p.add_argument("action", choices=["show", "versions", "rebuild"])
+    p.add_argument("--version", type=int)
+    p = add("results", cmd_results, "跨论文结果表：不给 task 列 benchmark")
+    p.add_argument("task", nargs="?")
+    p = add("report", cmd_report, "周报 / 月报 / 热点：build / show / hot")
+    p.add_argument("action", choices=["build", "show", "hot"])
+    p.add_argument("--period", choices=["weekly", "monthly"], default="weekly")
+    p.add_argument("--key")
+    p = add("field", cmd_field, "研究方向配置：init <示例> / show / set key=value")
+    p.add_argument("action", choices=["init", "show", "set"])
+    p.add_argument("kv", nargs="*")
+

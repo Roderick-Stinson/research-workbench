@@ -1,0 +1,40 @@
+{% macro facet_badges(qr, field, limit=6) -%}
+{%- set n = namespace(i=0) -%}
+{%- for k, vs in (qr.facets or {}).items() -%}{%- for v in vs -%}{%- if n.i < limit -%}
+<a class="badge {{ 'v' if (field.facets.get(k) or {}).get('primary') else '' }}" href="/papers?f={{ (k ~ '=' ~ v.split(':')[0].strip())|urlencode }}" title="{{ (field.facets.get(k) or {}).get('label', k) }}">{{ v.split(':')[0] }}</a>
+{%- set n.i = n.i + 1 -%}{%- endif -%}{%- endfor -%}{%- endfor -%}
+{%- endmacro %}
+
+{% macro flags(st) -%}
+{% if st.fav %}<span class="badge warn" title="收藏">★ 收藏</span>{% endif %}
+{% if st.read %}<span class="badge ok">已读</span>{% endif %}
+{% if st.reproduce %}<span class="badge run">想复现</span>{% endif %}
+{% if st.irrelevant %}<span class="badge muted">不相关</span>{% endif %}
+{%- endmacro %}
+
+{% macro paper_card(x, field, rank=None, compact=False) -%}
+{%- set m = x.m -%}{%- set qr = x.qr -%}
+<article class="pcard">
+  <div class="ph">
+    {% if rank %}<span class="rank">{{ rank }}</span>{% endif %}
+    <div>
+      <a class="pt" href="/paper/{{ m.id }}">{{ qr.title_zh or m.title }}</a>
+      {% if qr.title_zh %}<div class="po">{{ m.title }}</div>{% endif %}
+    </div>
+  </div>
+  {% if qr.one_liner %}<p class="pl">{{ qr.one_liner }}</p>{% elif not compact %}<p class="pl muted">{{ (m.abstract or '')|truncate(260, True, '…') }}</p>{% endif %}
+  <div class="pm">
+    {% if m.arxiv %}<a class="mono" href="https://arxiv.org/abs/{{ m.arxiv }}" target="_blank">arXiv {{ m.arxiv }}</a>{% endif %}
+    <span>{{ (m.published or '')[:10] }}</span>
+    {% if m.venue %}<span class="badge ok">{{ m.venue }}</span>{% elif qr.venue_claim %}<span class="badge ok" title="作者自称">{{ qr.venue_claim }}</span>{% endif %}
+    {% if m.code_urls %}<a class="badge" href="{{ m.code_urls[0] }}" target="_blank">代码</a>{% endif %}
+    {% if m.cites_seeds %}<span class="badge v" title="引用了种子：{{ m.cites_seeds|join(', ') }}">引用 {{ m.cites_seeds|length }} 个种子</span>{% endif %}
+    {% if (m.attention or {}).hf_upvotes %}<span title="Hugging Face 点赞">🤗 {{ m.attention.hf_upvotes }}</span>{% endif %}
+    {% if (m.attention or {}).hn_points %}<span title="Hacker News">HN {{ m.attention.hn_points }}</span>{% endif %}
+    {% if x.score and x.score.quality %}<span title="质量（新颖 / 严谨 / 重要 的均分）">质量 {{ '%.1f'|format(x.score.quality) }}</span>{% endif %}
+    {% if x.has_explainer %}<a class="badge run" href="/paper/{{ m.id }}#explainer">精读</a>{% endif %}
+    {{ flags(x.st) }}
+  </div>
+  {% if not compact %}<div class="pf">{{ facet_badges(qr, field) }}</div>{% endif %}
+</article>
+{%- endmacro %}

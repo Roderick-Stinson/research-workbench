@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}结果表 · 实验工作台{% endblock %}
+{% block body %}
+<h1>跨论文结果表</h1>
+<p class="sub">数字全部来自各论文速读里抽取的原文报告值，每个数字都能点回论文与表号。不同论文的设置（backbone、划分、提示）可能不同，按 指标 × backbone 分组。</p>
+<div class="pf" style="margin-bottom:14px">{% for b, n in benchmarks[:40] %}<a class="badge {{ 'run' if t and t.task == b }}" href="/results?task={{ b|urlencode }}">{{ b }} <span class="muted">{{ n }}</span></a>{% endfor %}</div>
+{% if t %}
+<h2>{{ t.task }} <span class="count">{{ t.n_papers }} 篇论文</span></h2>
+{% for g in t.groups %}
+<h3>{{ g.metric }} · {{ g.backbone }} <span class="muted small">{{ g.rows|length }} 条</span></h3>
+<div class="box scroll-x"><table><thead><tr><th>方法</th><th class="num">数值</th><th>论文</th><th>出处</th></tr></thead><tbody>
+{% for r in g.rows[:60] %}<tr><td>{% if r.is_proposed %}<b>{{ r.method }}</b> <span class="badge v">本文</span>{% else %}{{ r.method }}{% endif %}</td>
+<td class="num">{{ fmt_num(r.value) }}{{ '%' if r.unit == '%' else '' }}</td><td class="small"><a href="/paper/{{ r.pid }}">{{ r.paper|truncate(50) }}</a></td><td class="small muted">{{ r.where }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endfor %}
+{% else %}<div class="empty"><p>还没有抽取到的结果。论文速读完成后会自动出现。</p></div>{% endif %}
+{% endblock %}

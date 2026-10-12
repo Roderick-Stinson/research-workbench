@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% from "_macros.html" import inbox_item %}
+{% block title %}待认领 · 实验工作台{% endblock %}
+{% block body %}
+<h1>待认领</h1>
+<p class="sub">守护进程自动抓到、还没归入任何配置组的 Run。对 agent 说「记录 RUN-ID」即可认领；不是实验的说「忽略」。</p>
+<form method="get" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+  <input type="text" name="q" value="{{ q }}" placeholder="按命令 / 目录 / ID 过滤" style="flex:1;min-width:200px;padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)">
+  <select name="show" style="padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)">
+    <option value="main" {{ 'selected' if show == 'main' }}>实验</option>
+    <option value="all" {{ 'selected' if show == 'all' }}>包括服务</option>
+    <option value="ignored" {{ 'selected' if show == 'ignored' }}>已忽略</option>
+  </select>
+  <button class="copy" type="submit">筛选</button>
+</form>
+<div class="box">
+  {% for r in items %}{{ inbox_item(r) }}{% else %}<div class="inbox-item muted">没有</div>{% endfor %}
+</div>
+{% endblock %}

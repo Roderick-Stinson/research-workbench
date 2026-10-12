@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}IDEA · 实验工作台{% endblock %}
+{% block body %}
+<h1>IDEA</h1>
+<p class="sub">每天根据论文库、领域地图、实验与 bad case 构思，独立审稿（新颖性 / 问题真实性一票否决 + 均分 ≥ 7）通过的才出现在这里。只有你说删除才会删除。</p>
+{% if ideas %}
+<div class="plist">
+{% for i in ideas %}
+<article class="pcard">
+  <div class="ph"><div><a class="pt" href="/idea/{{ i.id }}">{{ i.title }}</a>
+    <div class="po mono">{{ i.id }} · {{ i.day }}</div></div></div>
+  <p class="pl">{{ i.summary }}</p>
+  <div class="pm">
+    <span class="badge {{ {'noted':'','verifying':'run','claim':'ok','abandoned':'muted'}.get(i.status, '') }}">{{ {'noted':'记录','verifying':'验证中','claim':'已升级为 claim','abandoned':'已放弃'}.get(i.status, i.status) }}</span>
+    <span>审稿均分 {{ i.score }}</span>
+    {% set p = problems.get(i.problem_id) %}{% if p %}<span>问题：{% if p.doc %}<a href="/problem/{{ p.id }}/doc" target="_blank">{{ p.title|truncate(50) }}</a>{% else %}{{ p.title|truncate(50) }}{% endif %}</span>{% endif %}
+    {% if i.claim %}<span>→ {{ i.claim }}</span>{% endif %}
+  </div>
+</article>
+{% endfor %}
+</div>
+{% else %}
+<div class="empty"><p>还没有通过评审的 IDEA。论文库积累到一定规模后，每日流程会开始构思。</p></div>
+{% endif %}
+{% endblock %}

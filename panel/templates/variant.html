@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% from "_macros.html" import state %}
+{% block title %}{{ v.title or v.id }} · 实验工作台{% endblock %}
+{% block body %}
+<p class="small"><a href="/">首页</a> /
+{% for p, e in used_by %}<a href="/p/{{ p.id }}">{{ p.title }}</a> · {{ e.id }}{% if not loop.last %}，{% endif %}{% endfor %}</p>
+<h1>{{ v.title or v.id }} {% if v.baseline %}<span class="badge muted">baseline</span>{% endif %}</h1>
+<p class="sub mono">{{ v.id }}{% if v.method %} · 方法 {{ v.method }}{% endif %}{% if v.task %} · 任务 {{ v.task }}{% endif %}</p>
+{% if v.params %}<p>参数：{{ v.params }}</p>{% endif %}
+{% if v.notes %}<p>{{ v.notes }}</p>{% endif %}
+{% if used_by %}<p class="small">支撑的 claim：{% for p, e in used_by %}<a href="/p/{{ p.id }}">{{ p.id }}/{{ e.id }}</a> {{ e.claim }}{% if not loop.last %}；{% endif %}{% endfor %}</p>
+{% else %}<div class="alert warn">这个配置组还没挂到任何 claim 上。<button class="copy" data-text="把配置组 {{ v.id }} 挂到 claim ……上">复制指令</button></div>{% endif %}
+
+{% for w in row.warns %}
+<div class="alert warn"><b>⚠ {{ w.msg }}</b>
+  {% if w.files %}<div class="small mono" style="margin-top:6px">{% for f in w.files[:20] %}{{ f }}<br>{% endfor %}</div>{% endif %}
+  {% if w.groups %}<div class="small" style="margin-top:6px">{% for k, ids in w.groups.items() %}
+    <div><span class="mono muted">{{ k | truncate(90, True, '…') }}</span>：{% for i in ids %}<a class="mono" href="/r/{{ i }}">{{ i }}</a> {% endfor %}</div>{% endfor %}</div>{% endif %}
+  <div class="small muted" style="margin-top:6px">只警告，不拆组。点开两个 Run 的「代码」页可以看具体差异。</div>
+</div>
+{% endfor %}
+
+{% if repro_rows %}
+<h2>复现：论文报告 vs 我们 <span class="badge {{ 'ok' if repro_status == '已复现' else ('bad' if repro_status == '复现差距' else 'run') }}">{{ repro_status }}</span></h2>
+<div class="box scroll-x"><table><thead><tr><th>指标</th><th class="num">论文报告</th><th class="num">我们（均值 ± std）</th><th class="num">n</th><th class="num">差</th><th>容差内</th><th>出处</th></tr></thead><tbody>
+{% for r in repro_rows %}<tr><td>{{ r.metric }}{% if r.paper_metric %} <span class="muted small">（论文：{{ r.paper_metric }}{% if r.backbone %} · {{ r.backbone }}{% endif %}）</span>{% endif %}</td>
+<td class="num">{{ fmt_num(r.reported) }}</td><td class="num">{{ fmt_ms(r.ours_mean, r.ours_std) }}</td><td class="num">{{ r.n }}</td>
+<td class="num">{{ fmt_num(r.gap) if r.gap is defined else '-' }}</td><td>{% if r.within is defined %}{{ '✓' if r.within else '✗' }}（±{{ r.tolerance }}）{% else %}-{% endif %}</td><td class="small muted">{{ r.where or '' }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if v.paper %}<p class="small">论文：<a href="/paper/{{ v.paper }}">{{ v.paper }}</a></p>{% endif %}
+{% endif %}
+
+<h2>汇总</h2>
+{% if row.agg %}
+<div class="box scroll-x"><table>
+<thead><tr><th>指标</th><th class="num">均值 ± 标准差</th><th class="num">n</th><th>各 Run</th></tr></thead>
+<tbody>{% for m, a in row.agg.items() %}
+<tr><td>{{ m }}</td><td class="num"><b>{{ fmt_ms(a.mean, a.std) }}</b></td><td class="num">{{ a.n }}</td>
+<td class="small">{% for x in a['values'] %}<a class="mono" href="/r/{{ x.run }}">{{ fmt_num(x.value) }}</a>{% if x.seed is not none %}<span class="muted">（种子 {{ x.seed }}）</span>{% endif %}{% if not loop.last %}，{% endif %}{% endfor %}</td></tr>
+{% endfor %}</tbody></table></div>
+{% else %}<div class="empty"><p>还没有指标。认领时让 agent 从结果文件里读，或说「把 RUN 的 acc 记为 0.83」。</p></div>{% endif %}
+
+{% if charts %}
+<h2>曲线</h2>
+<div class="charts">{% for k, svg in charts.items() %}{% if svg %}<div class="box"><div class="lbl">{{ k }}</div>{{ svg | safe }}</div>{% endif %}{% endfor %}</div>
+{% endif %}
+
+<h2>Run <span class="count">{{ per_run|length }}</span></h2>
+<div class="box scroll-x"><table>
+<thead><tr><th>Run</th><th>状态</th><th>认领状态</th><th>种子</th><th>开始</th><th class="num">时长</th>{% for m in row.metrics %}<th class="num">{{ m }}</th>{% endfor %}<th>目的 / 结论</th></tr></thead>
+<tbody>
+{% for r, m in per_run %}
+<tr><td class="mono"><a href="/r/{{ r.id }}">{{ r.id }}</a></td><td>{{ state(r) }}</td>
+<td><span class="badge {{ 'ok' if r.claim.status == 'ok' else 'bad' }}">{{ {'ok':'计入','failed':'失败','discard':'作废'}.get(r.claim.status, r.claim.status) }}</span></td>
+<td class="mono">{{ r.claim.seed if r.claim.seed is not none else '-' }}</td><td>{{ fmt_time(r.started_at) }}</td>
+<td class="num">{{ human_duration(r.duration_s) }}</td>
+{% for k in row.metrics %}<td class="num">{{ fmt_num(m.get(k)) }}</td>{% endfor %}
+<td class="small">{{ r.claim.purpose or '' }}{% if r.claim.conclusion %}<div class="muted">→ {{ r.claim.conclusion }}</div>{% endif %}</td></tr>
+{% endfor %}
+</tbody></table></div>
+<div class="row-actions">
+  <button class="copy" data-text="总结一下配置组 {{ v.id }} 的结果（wb summary {{ v.id }}），有一致性警告的话说明差在哪">复制「总结」指令</button>
+</div>
+{% endblock %}

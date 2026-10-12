@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% from "_paper.html" import paper_card %}
+{% block title %}{{ iss.day }} · 今日论文{% endblock %}
+{% block body %}
+<div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+  <h1>{{ iss.day }} · {{ field.name }}</h1>
+  <form method="get" onsubmit="location.href='/issue/'+this.d.value;return false">
+    <select name="d" onchange="location.href='/issue/'+this.value" style="padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)">
+      {% for d in days %}<option value="{{ d }}" {{ 'selected' if d == iss.day }}>{{ d }}</option>{% endfor %}
+    </select>
+  </form>
+</div>
+<p class="sub">一日一期，当天的新进展更新本期。精选 {{ picks|length }} 篇（按质量，最多 {{ field.selection.max_per_day }} 篇）· 新收录 {{ (iss.new or [])|length }} 篇
+  {% if iss.pushed %} · 已推送 {{ fmt_time(iss.pushed[0].at) }}{% endif %} · 更新于 {{ fmt_time(iss.updated_at) }}</p>
+
+{% set bad = [] %}{% for k, v in (iss.steps or {}).items() %}{% if v.status in ('failed','blocked') %}{% set _ = bad.append((k, v)) %}{% endif %}{% endfor %}
+{% if bad %}<div class="alert warn"><b>有步骤没成功</b>{% for k, v in bad %}<div class="small"><span class="mono">{{ k }}</span>：{{ v.error }}</div>{% endfor %}</div>{% endif %}
+{% if not iss.steps %}<div class="empty"><p>这一天的流程还没有运行。每天 01:00 自动运行，08:30 推送到 Telegram。</p></div>{% endif %}
+
+{% if picks %}
+<h2>今日精选 <span class="count">{{ picks|length }}</span></h2>
+<div class="plist">{% for x in picks %}{{ paper_card(x, field, rank=x.pick.rank) }}{% endfor %}</div>
+{% elif iss.steps %}
+<div class="empty"><p>今天没有达到质量门槛的新论文。</p></div>
+{% endif %}
+
+{% if progress %}
+<h2>进展 <span class="count">{{ progress|length }}</span></h2>
+<div class="box">{% for g in progress %}<div class="inbox-item"><div><a href="/paper/{{ g.m.id }}">{{ g.qr.title_zh or g.m.title }}</a></div><div class="meta">{{ g.g.text }}</div></div>{% endfor %}</div>
+{% endif %}
+
+{% if new %}
+<h2>其它新收录 <span class="count">{{ new|length }} · 已速读，未进精选</span></h2>
+<div class="plist">{% for x in new %}{{ paper_card(x, field, compact=True) }}{% endfor %}</div>
+{% endif %}
+
+{% if iss.repos %}
+<h2>新仓库 <span class="count">{{ iss.repos|length }}</span></h2>
+<div class="box">{% for r in iss.repos %}<div class="inbox-item"><div><a href="{{ r.url }}" target="_blank">{{ r.name }}</a> ⭐{{ r.stars }}</div><div class="meta">{{ r.description }}</div></div>{% endfor %}</div>
+{% endif %}
+
+<details style="margin-top:24px"><summary class="small">流程明细</summary>
+<div class="box scroll-x" style="margin-top:8px"><table><thead><tr><th>步骤</th><th>状态</th><th class="num">耗时</th><th>统计 / 错误</th></tr></thead><tbody>
+{% for k, v in (iss.steps or {}).items() %}<tr><td class="mono">{{ k }}</td><td><span class="badge {{ 'ok' if v.status == 'ok' else ('bad' if v.status == 'failed' else 'warn') }}">{{ v.status }}</span></td><td class="num">{{ v.seconds }}s</td><td class="small mono">{{ v.error or ((v.stats or {})|tojson) }}</td></tr>{% endfor %}
+</tbody></table></div></details>
+{% endblock %}

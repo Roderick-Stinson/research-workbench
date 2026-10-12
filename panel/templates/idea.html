@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}{{ it.title }} · IDEA{% endblock %}
+{% block body %}
+<p class="small"><a href="/ideas">IDEA</a> /</p>
+<h1>{{ it.title }}</h1>
+<p class="sub mono">{{ it.id }} · {{ it.day }} · 审稿均分 {{ it.score }} · {{ {'noted':'记录','verifying':'验证中','claim':'已升级为 claim','abandoned':'已放弃'}.get(it.status, it.status) }}</p>
+<p class="purpose">{{ it.summary }}</p>
+<div class="row-actions">
+  <button class="copy" data-text="开始验证 IDEA {{ it.id }}：先设计最小验证实验">复制「开始验证」</button>
+  <button class="copy" data-text="把 IDEA {{ it.id }} 升级为论文项目的 claim：">复制「升级为 claim」</button>
+  <button class="copy" data-text="放弃 IDEA {{ it.id }}，原因：">复制「放弃」</button>
+  <button class="copy" data-text="删除 IDEA {{ it.id }}">复制「删除」</button>
+</div>
+{% if prob %}
+<h2>针对的问题</h2>
+<div class="box" style="padding:12px 16px"><b>{{ prob.title }}</b> <span class="muted small">（{{ {'papers':'聚合多篇论文','badcase':'bad case 分析'}.get(prob.source, prob.source) }}）</span>
+  {% if prob.doc %} · <a href="/problem/{{ prob.id }}/doc" target="_blank">问题文档</a>{% endif %}
+  <ul class="small">{% for e in prob.evidence or [] %}<li><span class="mono">{{ e.ref }}</span> {{ e.where }}：“{{ e.quote|truncate(200) }}” {{ e.numbers or '' }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+{% if review %}
+<h2>审稿意见 <span class="count">重要 {{ review.scores.significance }} · 新颖 {{ review.scores.novelty }} · 深度 {{ review.scores.depth }} · 可行 {{ review.scores.feasibility }}</span></h2>
+<div class="box" style="padding:12px 16px">
+  <p style="margin-top:0">{{ review.summary }}</p>
+  <div class="small"><b>主要弱点</b><ul>{% for w in review.weaknesses or [] %}<li>{{ w }}</li>{% endfor %}</ul></div>
+  {% if review.suggestions %}<div class="small"><b>建议</b><ul>{% for w in review.suggestions %}<li>{{ w }}</li>{% endfor %}</ul></div>{% endif %}
+  <details><summary class="small">查新记录</summary><div class="small">{% for s in review.novelty_search or [] %}<div><b>{{ s.query }}</b>{% for c in s.closest or [] %}<div>· <a href="{{ c.url }}" target="_blank">{{ c.title }}</a>：相同 {{ c.overlap }}；区别 {{ c.difference }}</div>{% endfor %}</div>{% endfor %}</div></details>
+</div>
+{% endif %}
+{% if has_doc %}
+<h2>IDEA 说明（paper-explainer 前 6 步）<a class="small" href="/idea/{{ it.id }}/doc" target="_blank">新窗口打开</a></h2>
+<iframe src="/idea/{{ it.id }}/doc" sandbox="allow-scripts allow-popups" style="width:100%;height:85vh;border:1px solid var(--line);border-radius:10px;background:#fff"></iframe>
+{% endif %}
+{% endblock %}

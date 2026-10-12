@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}领域地图 · 实验工作台{% endblock %}
+{% block body %}
+<h1>领域地图 · {{ field.name }}</h1>
+{% if m %}
+<p class="sub">v{{ m.version }} · {{ m.n_papers }} 篇 · {{ fmt_time(m.created_at) }} · {{ '重组' if m.kind == 'rebuild' else '每日归类' }}
+ {% if versions|length > 1 %}· 版本：{% for v in versions|reverse %}{% if loop.index <= 12 %}<a class="mono small" href="/map?v={{ v.version }}">v{{ v.version }}</a> {% endif %}{% endfor %}{% endif %}</p>
+{% if m.overview %}<p class="purpose">{{ m.overview|ids }}</p>{% endif %}
+{% if m.changes %}<div class="alert">相对上一版：{{ m.changes|ids }}</div>{% endif %}
+{% for c in m.primary.categories %}
+<h2>{{ c.name }} <span class="count">{{ (c.members or [])|length }} 篇</span></h2>
+<div class="box" style="padding:14px 18px">
+  <p style="margin-top:0"><b>核心思路</b>：{{ c.idea|ids }}</p>
+  {% if c.prose %}<p>{{ c.prose|ids }}</p>{% endif %}
+  <p class="warnline" style="font-size:14px"><b>这一类没考虑到</b>：{{ c.missing|ids }}</p>
+  {% if c.representative %}<div class="small"><b>代表工作</b>：{% for p in c.representative %}{% set t = titles.get(p) %}<a href="/paper/{{ p }}">{{ (t.title if t else p)|truncate(60) }}</a>{% if not loop.last %}；{% endif %}{% endfor %}</div>{% endif %}
+  <details style="margin-top:8px"><summary class="small">全部 {{ (c.members or [])|length }} 篇</summary>
+    <div class="small" style="columns:2 360px;margin-top:6px">{% for p in c.members or [] %}{% set t = titles.get(p) %}<div><a href="/paper/{{ p }}">{{ (t.title if t else p)|truncate(70) }}</a> <span class="muted">{{ (t.published or '')[:7] if t }}</span></div>{% endfor %}</div>
+  </details>
+</div>
+{% endfor %}
+{% else %}
+<div class="empty"><p>还没有领域地图。每日流程第一次运行时会用 codex 读完整个论文库生成第一版，之后每周最多重组一次。</p></div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}实验工作台{% endblock %}</title>
+<link rel="stylesheet" href="/static/style.css?v={{ version }}">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%232f5f98'/><path d='M4 11V5h2l2 3 2-3h2v6' stroke='white' stroke-width='1.4' fill='none'/></svg>">
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <a class="brand" href="/">实验工作台</a>
+  <nav class="main">
+    <a href="/" class="{{ 'on' if request.url.path == '/' }}">首页</a>
+    <a href="/issue" class="{{ 'on' if request.url.path.startswith('/issue') }}">今日论文</a>
+    <a href="/papers" class="{{ 'on' if request.url.path.startswith('/paper') }}">论文库</a>
+    <a href="/map" class="{{ 'on' if request.url.path.startswith('/map') }}">地图</a>
+    <a href="/results" class="{{ 'on' if request.url.path.startswith('/results') }}">结果表</a>
+    <a href="/ideas" class="{{ 'on' if request.url.path.startswith('/idea') }}">IDEA</a>
+    <a href="/hot" class="{{ 'on' if request.url.path.startswith('/hot') }}">热点</a>
+    <a href="/reports" class="{{ 'on' if request.url.path.startswith('/reports') }}">报告</a>
+    <a href="/inbox" class="{{ 'on' if request.url.path.startswith('/inbox') }}">待认领</a>
+  </nav>
+  <div class="status">
+    {% if daemon.alive %}<span><span class="dot on"></span>守护进程运行中</span>
+    {% else %}<span title="最后心跳 {{ daemon.hb.ts or '无' }}"><span class="dot off"></span>守护进程未运行</span>{% endif %}
+    {% for v in daemon.vols[:1] %}<span class="hide-sm">{{ v.path }} 剩余 {{ human_bytes(v.free) }}</span>{% endfor %}
+  </div>
+</div></header>
+<main><div class="wrap">
+{% if not daemon.alive %}<div class="alert bad">守护进程没有在运行，新启动的实验不会被抓到。在服务器上执行 <code>wb doctor</code> 查看原因（cron 每分钟会自动拉起）。</div>{% endif %}
+{% for v in daemon.low %}<div class="alert warn">{{ v.path }} 只剩 {{ human_bytes(v.free) }}。工作台不会自动删除任何东西；需要清理时对 agent 说明哪些产物不要了。</div>{% endfor %}
+{% block body %}{% endblock %}
+<div class="foot">workbench {{ version }} · 只读面板；所有修改请对 codex / Claude 说（它们会调用 <code>wb</code>）</div>
+</div></main>
+<script>
+function copyText(btn, text) {
+  function done() { btn.classList.add('done'); var t = btn.textContent; btn.textContent = '已复制'; setTimeout(function(){ btn.textContent = t; btn.classList.remove('done'); }, 1400); }
+  if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(done); return; }
+  var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) { prompt('复制这段话给 agent：', text); }
+  document.body.removeChild(ta);
+}
+document.addEventListener('click', function (e) {
+  var b = e.target.closest('button.copy'); if (b) copyText(b, b.dataset.text);
+});
+</script>
+</body>
+</html>

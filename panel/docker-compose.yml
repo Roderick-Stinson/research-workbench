@@ -1,0 +1,29 @@
+# 只读面板（ADR-0011）。所有挂载都是只读的：面板不可能改任何数据。
+# 部署：cp .env.example .env（按实际改）→ docker compose up -d --build
+services:
+  panel:
+    build:
+      context: ..
+      dockerfile: panel/Dockerfile
+      network: host
+      args:                       # 构建时直连镜像源，不走宿主机代理
+        http_proxy: ""
+        https_proxy: ""
+        APT_MIRROR: ${APT_MIRROR:-mirrors.tuna.tsinghua.edu.cn}
+        PIP_INDEX: ${PIP_INDEX:-https://pypi.tuna.tsinghua.edu.cn/simple}
+    container_name: workbench-panel
+    restart: unless-stopped
+    network_mode: host            # 端口直接绑宿主机
+    user: "${WB_UID:?在 panel/.env 里设置 WB_UID}:${WB_GID:?在 panel/.env 里设置 WB_GID}"   # 以实验用户身份读文件
+    command: ["python", "-m", "uvicorn", "panel.app:app", "--host", "0.0.0.0", "--port", "${WB_PANEL_PORT:-8765}"]
+    environment:
+      WB_HOME: ${WB_HOME:?在 panel/.env 里设置 WB_HOME}
+      HOME: ${WB_USER_HOME:?在 panel/.env 里设置 WB_USER_HOME}
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: "*"
+    volumes:
+      - ..:/app:ro                                            # 代码
+      - ${WB_DATA_ROOT:?}:${WB_DATA_ROOT:?}:ro          # 工作台数据 + 实时日志
+      - ${WB_USER_HOME:?}/.codex/sessions:${WB_USER_HOME:?}/.codex/sessions:ro   # 关联对话
+      - ${WB_USER_HOME:?}/.claude/projects:${WB_USER_HOME:?}/.claude/projects:ro

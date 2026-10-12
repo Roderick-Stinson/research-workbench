@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% from "_paper.html" import facet_badges, flags %}
+{% block title %}{{ x.qr.title_zh or x.m.title }} · 论文{% endblock %}
+{% block body %}
+{% set m = x.m %}{% set qr = x.qr %}
+<p class="small"><a href="/papers">论文库</a> /{% if m.picked %} <a href="/issue/{{ m.picked.day }}">{{ m.picked.day }} 精选第 {{ m.picked.rank }} 篇</a>{% endif %}</p>
+<h1 style="font-size:20px">{{ qr.title_zh or m.title }}</h1>
+{% if qr.title_zh %}<p class="sub" style="margin-bottom:6px">{{ m.title }}</p>{% endif %}
+<p class="small muted">{{ (m.authors or [])[:8]|join(', ') }}{% if (m.authors or [])|length > 8 %} 等 {{ m.authors|length }} 人{% endif %}</p>
+<div class="pm" style="margin:10px 0">
+  {% if m.arxiv %}<a class="mono" href="https://arxiv.org/abs/{{ m.arxiv }}" target="_blank">arXiv {{ m.arxiv }}</a> <a class="small" href="https://arxiv.org/pdf/{{ m.arxiv }}" target="_blank">PDF</a>{% elif m.url %}<a href="{{ m.url }}" target="_blank">原文</a>{% endif %}
+  <span>发表 {{ (m.published or '-')[:10] }}</span>
+  {% if m.venue %}<span class="badge ok">{{ m.venue }}</span>{% elif qr.venue_claim %}<span class="badge ok">{{ qr.venue_claim }}（作者自称）</span>{% endif %}
+  {% for c in m.code_urls or [] %}<a class="badge" href="{{ c }}" target="_blank">{{ c.replace('https://github.com/', '') }}</a>{% endfor %}
+  {% if m.seed %}<span class="badge v">种子论文</span>{% endif %}
+  {{ flags(x.st) }}
+</div>
+<div class="pf">{{ facet_badges(qr, field, 20) }}</div>
+<div class="row-actions">
+  <button class="copy" data-text="把论文 {{ m.id }}（{{ (qr.title_zh or m.title)|truncate(60) }}）标为已读">复制「已读」</button>
+  <button class="copy" data-text="收藏论文 {{ m.id }}">复制「收藏」</button>
+  <button class="copy" data-text="论文 {{ m.id }} 和我的方向不相关，标记一下">复制「不相关」</button>
+  <button class="copy" data-text="我想复现论文 {{ m.id }}（{{ m.title|truncate(80) }}），先按原文设定跑">复制「复现」</button>
+</div>
+
+{% if qr %}
+<div class="callout-ai small muted" style="margin-top:16px">据论文{{ {'arxiv-html':' arXiv HTML 全文','pdf':' PDF 全文','abstract':'摘要（没拿到全文）'}.get(qr.basis, '') }}整理，AI 生成，以原文为准。</div>
+{% if qr.one_liner %}<p class="purpose">{{ qr.one_liner }}</p>{% endif %}
+<div class="grid2">
+  {% for k, lab in [('problem','问题'),('method','方法'),('results','实验与结果'),('limitations','局限与可以继续做的')] %}
+  <div class="box" style="padding:12px 16px"><div class="small muted">{{ lab }}</div><div>{{ (qr.quickread or {}).get(k) or '-' }}</div></div>
+  {% endfor %}
+</div>
+{% set su = qr.setup or {} %}
+<h2>实验设置</h2>
+<div class="box"><dl class="kv">
+  <dt>任务 / 数据集</dt><dd>{{ (su.tasks or [])|join('、') or '-' }}</dd>
+  <dt>Backbone</dt><dd>{{ (su.backbones or [])|join('、') or '-' }}</dd>
+  <dt>指标</dt><dd>{{ (su.metrics or [])|join('、') or '-' }}</dd>
+  <dt>对比方法</dt><dd>{{ (su.baselines or [])|join('、') or '-' }}</dd>
+</dl></div>
+{% if qr.results %}
+<h2>抽取的结果 <span class="count">{{ qr.results|length }} 条 · 只取原文明确报告的数字</span></h2>
+<div class="box scroll-x"><table><thead><tr><th>方法</th><th>任务</th><th>指标</th><th>Backbone</th><th class="num">数值</th><th>出处</th></tr></thead><tbody>
+{% for r in qr.results %}<tr class="{{ 'best' if r.is_proposed }}"><td>{% if r.is_proposed %}<b>{{ r.method }}</b>{% else %}{{ r.method }}{% endif %}</td><td>{{ r.task }}</td><td>{{ r.metric }}</td><td class="small">{{ r.backbone or '' }}</td><td class="num">{{ fmt_num(r.value) }}{{ r.unit if r.unit and r.unit != '%' else ('%' if r.unit == '%' else '') }}</td><td class="small muted">{{ r.where }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endif %}
+{% if qr.quality %}
+<h2>质量评估 <span class="count">新颖 {{ qr.quality.novelty }} · 严谨 {{ qr.quality.rigor }} · 重要 {{ qr.quality.significance }}</span></h2>
+<p>{{ qr.quality.reason }}</p>
+{% endif %}
+{% else %}
+<div class="empty"><p>还没有速读。{% if m.intake.state == 'candidate' %}等待相关性判定。{% endif %}</p></div>
+<h2>摘要</h2><p>{{ m.abstract }}</p>
+{% endif %}
+
+{% if x.has_explainer %}
+<h2 id="explainer">精读（paper-explainer 8 步）<a class="small" href="/paper/{{ m.id }}/explainer" target="_blank">新窗口打开</a></h2>
+<iframe src="/paper/{{ m.id }}/explainer" sandbox="allow-scripts allow-popups" style="width:100%;height:85vh;border:1px solid var(--line);border-radius:10px;background:#fff"></iframe>
+{% endif %}
+
+<h2>收录依据</h2>
+<div class="box"><dl class="kv">
+  <dt>判定</dt><dd>{{ {'relevant':'属于方向','irrelevant':'不属于','candidate':'待判定'}.get(m.intake.state, m.intake.state) }}{% if m.intake.reason %}：{{ m.intake.reason }}{% endif %}</dd>
+  <dt>来源</dt><dd class="small">{% for s in m.sources %}<div>{{ {'arxiv':'arXiv 检索','hf':'HF Daily Papers','cites-seed':'引用了种子','arxiv-backfill':'arXiv 回填','seed':'种子'}.get(s.name, s.name) }} · {{ s.ref }}{% if s.name == 'cites-seed' %}（{{ seeds.get(s.ref, '')|truncate(50) }}）{% endif %} · {{ fmt_time(s.at) }}</div>{% endfor %}</dd>
+  {% if m.attention %}<dt>关注度</dt><dd class="small">🤗 {{ m.attention.hf_upvotes or 0 }} · HN {{ m.attention.hn_points or 0 }} 分 / {{ m.attention.hn_comments or 0 }} 评论{% for l in m.attention.hn_links or [] %} <a href="{{ l }}" target="_blank">讨论</a>{% endfor %}</dd>{% endif %}
+  {% if x.score %}<dt>精选分</dt><dd class="small mono">{{ '%.3f'|format(x.score.total) }}（质量 {{ x.score.quality }} · 关注 {{ x.score.attention }} · 种子 {{ x.score.seed }} · 代码/录用 {{ x.score.extra }}）</dd>{% endif %}
+  {% for g in m.progress or [] %}<dt>进展</dt><dd class="small">{{ fmt_time(g.at) }} {{ g.text }}</dd>{% endfor %}
+</dl></div>
+{% if not qr %}{% elif m.abstract %}<details style="margin-top:12px"><summary class="small">原文摘要</summary><p>{{ m.abstract }}</p></details>{% endif %}
+{% endblock %}

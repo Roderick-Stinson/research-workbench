@@ -1,0 +1,115 @@
+{
+  "id": "mas-arch-opt",
+  "name": "多智能体架构优化",
+  "description": "基于大语言模型的多智能体系统（MAS）的架构 / 工作流自动设计与优化：agentic workflow search、multi-agent orchestration、通信拓扑 / graph design、agent 角色与提示联合优化、查询自适应的系统生成、以及支撑这些方向的评测、成本-性能权衡与理论分析。相关的都算。",
+  "subtopics": [
+    "agentic workflow search / generation",
+    "multi-agent orchestration / routing",
+    "communication topology / graph design",
+    "agent role & prompt co-optimization",
+    "query-adaptive MAS generation",
+    "supernet / architecture search for agents",
+    "self-evolving / self-improving agent systems",
+    "cost-performance trade-off of MAS",
+    "MAS evaluation & failure analysis"
+  ],
+  "arxiv_keywords": [
+    "multi-agent",
+    "multi agent",
+    "multiagent",
+    "agentic",
+    "ti:agent",
+    "ti:agents",
+    "abs:orchestration AND abs:agent",
+    "abs:workflow AND abs:agent",
+    "abs:topology AND abs:agent",
+    "compound AI"
+  ],
+  "arxiv_categories": [
+    "cs.AI",
+    "cs.CL",
+    "cs.MA",
+    "cs.LG",
+    "cs.SE",
+    "cs.NE"
+  ],
+  "facets": {
+    "optimizes": {
+      "label": "优化对象",
+      "primary": true,
+      "values": [
+        "prompt",
+        "agent 角色 / 能力",
+        "通信拓扑",
+        "workflow 代码 / 算子",
+        "整体流水线",
+        "模型权重（训练）",
+        "其它"
+      ]
+    },
+    "search": {
+      "label": "搜索 / 生成方式",
+      "values": [
+        "MCTS / 树搜索",
+        "进化 / 遗传",
+        "强化学习",
+        "可微 / 超网",
+        "LLM 直接生成",
+        "图神经网络",
+        "贝叶斯 / 采样",
+        "人工设计",
+        "其它"
+      ]
+    },
+    "granularity": {
+      "label": "粒度",
+      "values": [
+        "任务级（一个任务一个架构）",
+        "查询级（每个问题自适应）",
+        "其它"
+      ]
+    },
+    "kind": {
+      "label": "论文类型",
+      "values": [
+        "方法",
+        "评测 / 基准",
+        "分析 / 理论",
+        "综述",
+        "系统 / 工具"
+      ]
+    }
+  },
+  "selection": {
+    "max_per_day": 10,
+    "min_quality": 6.0,
+    "pick_window_days": 90
+  },
+  "seeds": [
+    {
+      "arxiv": "2410.10762",
+      "title": "AFlow: Automating Agentic Workflow Generation",
+      "why": "baseline"
+    },
+    {
+      "arxiv": "2408.08435",
+      "title": "Automated Design of Agentic Systems",
+      "why": "baseline"
+    },
+    {
+      "arxiv": "2502.04180",
+      "title": "Multi-agent Architecture Search via Agentic Supernet",
+      "why": "baseline"
+    },
+    {
+      "arxiv": "2410.11782",
+      "title": "G-Designer: Architecting Multi-agent Communication Topologies via Graph Neural Networks",
+      "why": "baseline"
+    },
+    {
+      "arxiv": "2507.18224",
+      "title": "Assemble Your Crew: Automatic Multi-agent Communication Topology Design via Autoregressive Graph Generation",
+      "why": "baseline"
+    }
+  ]
+}

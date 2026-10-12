@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "_paper.html" import paper_card %}
+{% block title %}论文库 · 实验工作台{% endblock %}
+{% macro qs(extra) -%}
+{%- set parts = [] -%}
+{%- if q %}{% set _ = parts.append('q=' ~ q|urlencode) %}{% endif -%}
+{%- if sort != 'curated' %}{% set _ = parts.append('sort=' ~ sort) %}{% endif -%}
+{%- if picked %}{% set _ = parts.append('picked=1') %}{% endif -%}
+{%- for k, vs in sel.items() %}{% for v in vs %}{% set _ = parts.append('f=' ~ (k ~ '=' ~ v)|urlencode) %}{% endfor %}{% endfor -%}
+{%- if extra %}{% set _ = parts.append(extra) %}{% endif -%}
+?{{ parts|join('&') }}
+{%- endmacro %}
+{% block body %}
+<h1>论文库</h1>
+<p class="sub">收录只判断是否属于「{{ field.name }}」，不评好坏（{{ all_total }} 篇）。每篇都有 AI 生成的速读，以原文为准。</p>
+<form method="get" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+  <input type="text" name="q" value="{{ q }}" placeholder="搜标题、摘要、速读" style="flex:1;min-width:200px;padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)">
+  {% for k, vs in sel.items() %}{% for v in vs %}<input type="hidden" name="f" value="{{ k }}={{ v }}">{% endfor %}{% endfor %}
+  <select name="sort" style="padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)">
+    <option value="curated" {{ 'selected' if sort == 'curated' }}>已整理优先</option>
+    <option value="latest" {{ 'selected' if sort == 'latest' }}>最新发表</option>
+  </select>
+  <label class="small" style="display:flex;align-items:center;gap:4px"><input type="checkbox" name="picked" value="1" {{ 'checked' if picked }}>只看精选过的</label>
+  <button class="copy" type="submit">筛选</button>
+</form>
+<div class="facets box">
+{% for key, c in counts.items() %}
+  <div class="frow"><span class="flabel">{{ c.label }}</span>
+  {% for v, n in c.counts %}
+    {% set on = v in (sel.get(key) or []) %}
+    <a class="badge {{ 'run' if on }}" href="{% if on %}/papers{{ qs('') | replace('f=' ~ (key ~ '=' ~ v)|urlencode, '') }}{% else %}/papers{{ qs('f=' ~ (key ~ '=' ~ v)|urlencode) }}{% endif %}">{{ v }} <span class="muted">{{ n }}</span></a>
+  {% endfor %}</div>
+{% endfor %}
+{% if sel %}<div class="frow"><a class="small" href="/papers{% if q %}?q={{ q|urlencode }}{% endif %}">清除筛选</a></div>{% endif %}
+</div>
+<p class="small muted">共 {{ total }} 篇{% if total > limit %}，第 {{ offset + 1 }}–{{ [offset + limit, total]|min }} 篇{% endif %}</p>
+<div class="plist">{% for x in items %}{{ paper_card(x, field) }}{% else %}<div class="empty"><p>没有符合条件的论文。</p></div>{% endfor %}</div>
+<div class="row-actions">
+  {% if offset > 0 %}<a class="copy" href="/papers{{ qs('offset=' ~ ([offset - limit, 0]|max)) }}">上一页</a>{% endif %}
+  {% if offset + limit < total %}<a class="copy" href="/papers{{ qs('offset=' ~ (offset + limit)) }}">下一页</a>{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,29 @@
+{% macro state(r) -%}
+{%- set b = exit_badge(r) -%}<span class="badge {{ b[1] }}">{{ b[0] }}</span>
+{%- endmacro %}
+
+{% macro inbox_item(r, child_count={}) -%}
+<div class="inbox-item">
+  <div class="cmd"><a href="/r/{{ r.id }}">{{ r.cmdline | truncate(220, True, '…') }}</a></div>
+  <div class="meta">
+    {{ state(r) }}
+    <span class="mono">{{ r.id }}</span>
+    <span>{{ basename(r.workdir or r.cwd) }}</span>
+    <span>{{ fmt_time(r.started_at) }}</span>
+    <span>{{ human_duration(r.duration_s) if r.duration_s else ago(r.start_ts) }}</span>
+    {% if r.session and r.session.agent %}<span>{{ '🤖 codex' if r.session.agent == 'codex' else '🤖 claude' }}{% if r.session.confidence in ('low', 'none') %}<span class="muted">（关联置信度低）</span>{% endif %}</span>{% endif %}
+    {% if 'gpu' in (r.tags or []) %}<span>GPU {{ (r.gpu or {}).devices or '' }}</span>{% endif %}
+    {% if child_count.get(r.id) %}<span>+{{ child_count[r.id] }} 个子 Run</span>{% endif %}
+    {% if 'late_capture' in (r.tags or []) %}<span class="badge warn" title="启动 {{ r.capture_delay_s }}s 后才拍到快照">迟到抓取</span>{% endif %}
+  </div>
+  <div class="act"><button class="copy" data-text="记录 {{ r.id }}（{{ r.cmdline | truncate(120, True, '…') }}）">复制「记录」指令</button></div>
+</div>
+{%- endmacro %}
+
+{% macro agg_cell(row, m, best) -%}
+{%- set a = row.agg.get(m) -%}
+{%- if a -%}
+  {%- set is_best = best.get(m) is not none and a.mean == best.get(m) and row.agg|length > 0 -%}
+  <span class="{{ 'best' if is_best }}">{{ fmt_ms(a.mean, a.std) }}</span> <span class="muted small">n={{ a.n }}</span>
+{%- else -%}<span class="muted">-</span>{%- endif -%}
+{%- endmacro %}

@@ -1,0 +1,26 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: 单元测试
+        run: python -m unittest discover -s tests/unit -v
+      - name: 端到端测试（假模型，不联网调用任何模型）
+        run: |
+          git config --global user.email ci@example.com
+          git config --global user.name ci
+          WB_E2E_DIR="$RUNNER_TEMP/wb_e2e" bash tests/e2e.sh
+      - name: 检查没有误提交的密钥 / 个人信息
+        run: |
+          ! grep -rnE "sk-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{20,}|hf_[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{30,}|[0-9]{8,10}:[A-Za-z0-9_-]{30,}" --exclude-dir=.git .

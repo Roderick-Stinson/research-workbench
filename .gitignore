@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+
+# 本机配置与数据（不进仓库）
+panel/.env
+*.env
+!*.env.example
+workbench-data/
+.pytest_cache/

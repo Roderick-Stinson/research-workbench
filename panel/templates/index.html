@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% from "_macros.html" import inbox_item %}
+{% block body %}
+<h1>实验工作台</h1>
+<p class="sub">共 {{ total_runs }} 个 Run，{{ running }} 个运行中；产物副本 {{ human_bytes(total_out) }}{% if daemon.disk.workbench_bytes %}，工作台总占用 {{ human_bytes(daemon.disk.workbench_bytes) }}{% endif %}{% for v in daemon.vols[:1] %}；{{ v.path }} 剩余 {{ human_bytes(v.free) }} / {{ human_bytes(v.total) }}{% endfor %}</p>
+
+<h2>我的论文 <span class="count">{{ projects|length }}</span></h2>
+{% if projects %}
+<div class="cards">
+  {% for o in projects %}
+  <a class="card" href="/p/{{ o.p.id }}">
+    <div class="t">{{ o.p.title }}</div>
+    <div class="meta">{{ o.p.id }}{% if o.p.venue %} · {{ o.p.venue }}{% endif %}{% if o.p.deadline %} · 截止 {{ o.p.deadline }}{% endif %}</div>
+    <div class="nums">
+      <div><b>{{ o.n_exp }}</b><span>claim</span></div>
+      <div><b>{{ o.n_var }}</b><span>配置组</span></div>
+      <div><b>{{ o.n_runs }}</b><span>Run</span></div>
+      {% if o.running %}<div><b>{{ o.running }}</b><span>运行中</span></div>{% endif %}
+    </div>
+    <div class="meta" style="margin-top:10px">
+      最近 {{ ago(o.last) }} · 产物 {{ human_bytes(o.size) }}
+      {% if o.nwarn %} · <span class="warnline">⚠ {{ o.nwarn }} 个配置组有一致性警告</span>{% endif %}
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty">
+  <p>还没有论文项目。项目 = 你自己要写的一篇论文（下载的别人论文代码只是 baseline，不是项目）。</p>
+  <p>对 codex / Claude 说：<b>"新建论文项目 xxx，claim 1 是……"</b>，或者在下面的待认领里点「记录」，agent 会一起帮你建好。</p>
+  <div class="row-actions"><button class="copy" data-text="帮我在实验工作台里新建一个论文项目：标题是「」，投稿到「」，第一个 claim 是「」。">复制「新建项目」指令</button></div>
+</div>
+{% endif %}
+
+<h2>待认领 <span class="count">{{ inbox_total }}</span>
+  {% if inbox_total > inbox|length %}<a class="small" href="/inbox">全部 →</a>{% endif %}</h2>
+{% if inbox %}
+<div class="box">
+  {% for r in inbox %}{{ inbox_item(r, child_count) }}{% endfor %}
+</div>
+{% else %}
+<div class="empty"><p>没有待认领的 Run。新启动的实验会自动出现在这里。</p></div>
+{% endif %}
+{% if services %}
+<details style="margin-top:12px"><summary>另有 {{ services|length }} 个推理服务 / 后台服务（vllm、uvicorn 等），默认折叠</summary>
+<div class="box" style="margin-top:8px">{% for r in services %}{{ inbox_item(r) }}{% endfor %}</div>
+</details>
+{% endif %}
+{% endblock %}
