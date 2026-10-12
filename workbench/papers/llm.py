@@ -66,7 +66,9 @@ def _set_block(reason: str, until: float, detail: str = ""):
     from . import quota
     snap = quota.snapshot(max_age=0)
     st = {"reason": reason, "until": until, "until_text": _fmt(until), "since": now_iso(), "detail": detail[:500],
-          "quota": {k: {"remaining": v["remaining"], "reset_at": v["reset_at"]} for k, v in (snap or {}).get("windows", {}).items()}}
+          "quota": [{"id": c["id"], "status": c["status"], "cooldowns": c["cooldowns"],
+                     "windows": {k: {"remaining": v["remaining"], "reset_at": v["reset_at"]} for k, v in c["windows"].items()}}
+                    for c in (snap or {}).get("credentials", [])]}
     p.write_text(json.dumps(st, ensure_ascii=False, indent=2))
     # 记一笔撞到限额的时刻与当时的额度快照
     with open(config.home() / "reports" / "llm_limits.jsonl", "a") as f:
@@ -123,32 +125,24 @@ def check_budget(kind: str, model: str | None = None) -> None:
     if not snap:
         return  # 额度接口不可用：只靠"撞到限额错误就熔断"
     b = budget_cfg()
-    now = time.time()
-    cd = snap["cooldowns"].get(model)
-    if cd and cd > now:
-        raise LLMPaused(f"{model} 冷却中", cd)
-    w5, w7 = quota.windows_for(snap, model)
-    for w in (w5, w7):
-        if w and w["remaining"] < b["daily_min_remaining"]:
-            raise LLMPaused(f"{w['label']} 额度用完（剩 {w['remaining']:.1f}%）", w["reset_at"])
+    p = quota.pool(snap, model, b["daily_min_remaining"], b["daily_min_remaining"])
+    if not p["usable"]:
+        raise LLMPaused(f"{model} 没有可用凭据（{'；'.join(p['reasons'])}）", p["next_at"] or time.time() + 1800)
     if kind == "backfill":
-        if w5 and w5["remaining"] < b["backfill_min_5h_remaining"]:
-            raise LLMPaused(f"{w5['label']} 剩 {w5['remaining']:.0f}%，留给每日流程，回填暂停", w5["reset_at"])
-        if w7 and w7["remaining"] < b["backfill_min_7d_remaining"]:
-            raise LLMPaused(f"{w7['label']} 剩 {w7['remaining']:.0f}%，回填暂停", w7["reset_at"])
+        pb = quota.pool(snap, model, b["backfill_min_5h_remaining"], b["backfill_min_7d_remaining"])
+        if not pb["usable"]:
+            raise LLMPaused(f"回填暂停：没有凭据的剩余额度高于回填阈值（{'；'.join(pb['reasons'])}）",
+                            pb["next_at"] or time.time() + 1800)
 
 
 def _quota_reset(model: str) -> float | None:
-    """撞到限额时，用管理端给的重置时间（哪个窗口用完了就用哪个）。"""
+    """撞到限额时，用管理端的数据算"最早有凭据恢复"的时间。"""
     from . import quota
     snap = quota.snapshot(max_age=0)
     if not snap:
         return None
-    cands = [w["reset_at"] for w in quota.windows_for(snap, model) if w and w["remaining"] < 1]
-    cd = snap["cooldowns"].get(model)
-    if cd:
-        cands.append(cd)
-    return max(cands) if cands else None
+    p = quota.pool(snap, model)
+    return None if p["usable"] else p["next_at"]
 
 
 def _reset_time(err_text: str, headers=None) -> float | None:
