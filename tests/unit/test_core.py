@@ -92,13 +92,33 @@ class TestQuota(unittest.TestCase):
             self.assertTrue(llm.QUOTA_RX.search(s), s)
         self.assertFalse(llm.QUOTA_RX.search("upstream_connect_failed"))
 
-    def test_windows_for(self):
-        snap = {"windows": {"gemini-5h": {"remaining": 0.05}, "gemini-weekly": {"remaining": 82.7},
-                            "3p-5h": {"remaining": 100}, "3p-weekly": {"remaining": 100}}}
-        w5, w7 = quota.windows_for(snap, "gemini-3.8-flash-medium")
-        self.assertEqual((w5["remaining"], w7["remaining"]), (0.05, 82.7))
-        w5, _ = quota.windows_for(snap, "gpt-5-mini")
-        self.assertEqual(w5["remaining"], 100)
+    def _snap(self):
+        now = time.time()
+        w = lambda r, reset=now + 3600: {"label": "x", "remaining": r, "reset_at": reset}  # noqa: E731
+        return {"credentials": [
+            {"id": 5, "status": "available", "cooldowns": {"gemini-x": now + 600},
+             "windows": {"gemini-5h": w(0.1, now + 600), "gemini-weekly": w(82.7), "3p-5h": w(100), "3p-weekly": w(100)}},
+            {"id": 13, "status": "available", "cooldowns": {},
+             "windows": {"gemini-5h": w(100), "gemini-weekly": w(100), "3p-5h": w(100), "3p-weekly": w(100)}},
+        ]}
+
+    def test_pool_skips_cooled_credential(self):
+        p = quota.pool(self._snap(), "gemini-x")
+        self.assertEqual([c["id"] for c in p["usable"]], [13])
+        self.assertEqual(p["best_5h"]["remaining"], 100)
+
+    def test_pool_none_usable_gives_next_time(self):
+        s = self._snap()
+        s["credentials"][1]["cooldowns"]["gemini-x"] = time.time() + 300
+        p = quota.pool(s, "gemini-x")
+        self.assertEqual(p["usable"], [])
+        self.assertAlmostEqual(p["next_at"] - time.time(), 300, delta=5)  # 凭据 13 先恢复
+
+    def test_pool_backfill_threshold(self):
+        s = self._snap()
+        s["credentials"][1]["windows"]["gemini-5h"]["remaining"] = 30
+        self.assertEqual(quota.pool(s, "gemini-x", 40, 35)["usable"], [])
+        self.assertEqual(len(quota.pool(s, "gemini-x")["usable"]), 1)
 
     def test_block_file_stops_requests(self):
         llm._block_path().parent.mkdir(parents=True, exist_ok=True)
