@@ -46,6 +46,12 @@ wb daily repick --reason "一句话原因" --force                 # 按最新�
 ```
 口味要写成能判断一篇新论文的句子（看论文的主要贡献），尽量保留本人原话；写之前先 `wb field show` 看现有口味，合并而不是覆盖。
 
+精选的硬门槛（ADR-0037）：方法论文必须和"领域常用方法"比较过才进精选。名单默认从论文库统计；本人想改时：
+```bash
+wb field set 'selection.standard_baselines=["AFlow", "ADAS", "MaAS", ...]'   # 指定名单（覆盖统计）
+wb field set selection.min_accept=6                                        # 中稿评估门槛（1–10，默认 5）
+```
+
 ## 更新研究画像（"根据这些论文更新我的方向"）
 ```bash
 wb field suggest     # 根据种子、本人提供的论文、标为不相关的论文、本人的评价，起草新的描述 / 子主题 / 检索词 / 口味（不写入）

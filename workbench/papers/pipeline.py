@@ -194,7 +194,7 @@ def choose(day: str, iss: dict, log, strict: bool = False) -> dict:
 
     already = [p["pid"] for p in iss.get("picks") or []]
     room = fieldmod.cfg_selection().get("max_per_day", 10) - len(already)
-    new = taste.rerank(select.pick(day, already, pool=max(30, 3 * room)), room, log=log, strict=strict) if room > 0 else []
+    new = taste.rerank(select.pick(day, already, pool=max(80, 6 * room)), room, log=log, strict=strict) if room > 0 else []
     for i, c in enumerate(new, start=len(already) + 1):
         c["rank"] = i
         c["picked_at"] = now_iso()
@@ -325,7 +325,8 @@ def render_telegram(iss: dict, update: bool = False) -> str:
     picks = iss.get("picks") or []
     if picks:
         rp = (iss.get("replaced_picks") or [])[-1:] if update else []
-        lines.append(f"今日精选 {len(picks)} 篇（按质量{'与你的口味' if any(p.get('like') is not None for p in picks) else ''}，最多 10 篇）"
+        lines.append(f"今日精选 {len(picks)} 篇（{'过了硬门槛与中稿评估，' if any(p.get('accept') for p in picks) else '按质量，'}"
+                     f"{'按你的口味排，' if any(p.get('like') is not None for p in picks) else ''}最多 10 篇）"
                      + (f"\n已按你的要求重新精选{('：' + e(rp[0]['reason'])) if rp[0].get('reason') else ''}" if rp else ""))
         for p in picks:
             m = store.load(p["pid"]) or {}
@@ -334,7 +335,10 @@ def render_telegram(iss: dict, update: bool = False) -> str:
             link = f"{url}/paper/{p['pid']}" if url else m.get("url")
             meta = " · ".join(x for x in [m.get("venue"), f"Q{p['quality']:.1f}" if p.get("quality") else None,
                                           "有代码" if m.get("code_urls") else None] if x)
-            why = f"\n👍 按你的评价：{e(p['like_reason'])}" if p.get("like_reason") else ""
+            ev = p.get("evidence") or {}
+            why = (f"\n对比：{e('、'.join(ev['std_baselines'][:5]))}" if ev.get("std_baselines") else "") + \
+                  (f" · 中稿评估 {p['accept']:.0f}/10" if p.get("accept") else "") + \
+                  (f"\n👍 {e(p['like_reason'])}" if p.get("like_reason") else "")
             lines.append(f"{p['rank']}. <a href=\"{e(link)}\">{e(title)}</a>\n"
                          f"{e(qr.get('one_liner') or '')}\n<i>{e(meta)}</i>{why}")
     else:

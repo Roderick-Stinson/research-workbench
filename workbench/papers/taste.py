@@ -4,8 +4,8 @@
 1 很差 · 2 差 · 3 一般 · 4 好 · 5 很好。
 
 评价怎么起作用：
-1. **每天的精选（自动）**：按原有分数取前 N 篇候选，交给批量模型对照"本人评价过的论文 + 理由"和画像里的口味
-   （画像里写了口味，或评价攒够 3 条，才重排），
+1. **每天的精选（自动）**：按原有分数取前 N 篇候选，先过硬门槛（rigor.py），再交给批量模型做中稿评估，
+   并对照"本人评价过的论文 + 理由"和画像里的口味（画像里写了口味，或评价攒够 3 条，才算口味分），
    给每篇打"本人会不会喜欢"的分，与原分数加权后重排。额度不够时退回原排序，不影响出刊。
 2. **画像（确认后生效）**：新评价攒够 3 条，每日流程自动起草画像修改（含"口味"：喜欢 / 不喜欢什么），
    推送里提示；本人确认后 `wb field apply` 才写入（ADR-0033）。
@@ -49,13 +49,19 @@ def rated() -> list:
     return out
 
 
-SYS_TASTE = """你在帮一位研究者从候选论文里挑出他会喜欢的。依据只有两样：
-1. 他的口味（画像里写的喜欢 / 不喜欢什么，可能为空）；
-2. 他亲自评价过的论文（1 很差 … 5 很好）和理由：和高分论文同类、同样扎实的给高分，和低分论文有同样毛病（看理由）的给低分。
-口味和评价都是他本人写的，口味里明确说不喜欢的那类论文（看论文的主要贡献是什么）要给低分。
-对每篇候选给 like（0 到 1：他会喜欢的把握）和一句中文理由（点出像哪篇评价过的论文、或者踩中 / 避开了哪个毛病）。
-不评价是否属于研究方向（候选都已属于方向）。
-输出 JSON：{"items": [{"i": 序号, "like": 0.0-1.0, "reason": "一句话"}]}，每篇都要有。"""
+SYS_TASTE = """你在帮一位研究者从候选论文里挑出值得他读的。对每篇候选给两个分：
+
+1. accept：这篇论文能不能中 CCF-A 会议（NeurIPS / ICML / ICLR / ACL 等）主会，1–10，按严格的审稿人标准，不要客气：
+   - 主要实验没有和领域常用方法正面比较（只和自己的变体 / 消融、通用做法、现成工具或模型比）→ 不超过 4；
+   - 只在自建 benchmark 或少量抽样子集上评测，没有常用 benchmark → 不超过 5；
+   - 贡献主要是工程拼装 / prompt 层面的增量，或者主要贡献是省 token / 省钱而效果持平 → 不超过 5；
+   - 在常用 benchmark 上和领域常用方法正面比较、有明显提升、有消融 → 7–9；
+   以"证据"一行为准（那是从论文结果表里统计出来的），论文自己的说法和"质量评语"只作参考（质量评语往往偏宽松）。
+2. like：他会不会喜欢（0 到 1），依据他的口味和他评价过的论文（看理由）；口味里明确说不喜欢的那类论文给低分。
+   没有口味、也没有评价时 like 填 null。
+
+每篇给一句中文理由，点出最关键的依据（比如"只和 Claude Code 比，没有对比 AFlow / MaAS"）。
+输出 JSON：{"items": [{"i": 序号, "accept": 1-10, "like": 0.0-1.0 或 null, "reason": "一句话"}]}，每篇都要有。"""
 
 
 def _brief(x: dict) -> str:
@@ -63,58 +69,95 @@ def _brief(x: dict) -> str:
 
 
 def judge(cands: list, kind: str = "daily") -> dict:
-    """cands: [{pid, ...}] → {pid: {like, reason}}。画像里没写口味、评价也少于 3 条时不调用模型，返回 {}。"""
+    """cands: [{pid, evidence?}] → {pid: {accept, like, reason}}。"""
+    if not cands:
+        return {}
     rs = rated()
     taste = fieldmod.field().get("taste") or {}
-    if not cands or (len(rs) < 3 and not (taste.get("likes") or taste.get("dislikes"))):
-        return {}
+    has_taste = len(rs) >= 3 or bool(taste.get("likes") or taste.get("dislikes"))
     ex = "\n".join(f"- [{x['score']} 分 {LABELS[x['score']]}] {_brief(x)}" + (f"\n  理由：{x['note']}" if x.get("note") else "")
                    for x in rs[:40]) or "（还没有）"
     lines = []
     for i, c in enumerate(cands):
         m = store.load(c["pid"]) or {}
         qr = store.load_quickread(c["pid"]) or {}
-        lines.append(f"[{i}] {m.get('title')}\n  一句话：{qr.get('one_liner') or ''}\n  质量评语：{(qr.get('quality') or {}).get('reason') or ''}")
+        venue = m.get("venue") or qr.get("venue_claim")
+        lines.append(f"[{i}] {m.get('title')}" + (f"（{venue}）" if venue else "")
+                     + f"\n  一句话：{qr.get('one_liner') or ''}\n  证据：{c.get('evidence_text') or '（没有抽取到结果）'}"
+                     + f"\n  质量评语：{(qr.get('quality') or {}).get('reason') or ''}")
     user = (f"口味：喜欢 {taste.get('likes') or '（未写）'}；不喜欢 {taste.get('dislikes') or '（未写）'}\n\n"
             f"他评价过的论文：\n{ex}\n\n候选论文：\n" + "\n".join(lines))
-    res = llm.chat(SYS_TASTE, user, task="taste", max_tokens=6000, kind=kind)
+    res = llm.chat(SYS_TASTE, user, task="taste", max_tokens=8000, kind=kind)
     out = {}
     for it in res.get("items") or []:
         try:
             pid = cands[int(it["i"])]["pid"]
-            out[pid] = {"like": max(0.0, min(1.0, float(it.get("like")))), "reason": it.get("reason")}
+            like = it.get("like")
+            out[pid] = {"accept": max(1.0, min(10.0, float(it.get("accept")))),
+                        "like": max(0.0, min(1.0, float(like))) if like is not None and has_taste else None,
+                        "reason": it.get("reason")}
         except (KeyError, ValueError, IndexError, TypeError):
             continue
     return out
 
 
 def rerank(cands: list, room: int, log=print, strict: bool = False) -> list:
-    """按口味重排：total' = (1 - w)·原分数 + w·like。
-    模型不可用时：每日流程（strict=False）退回原排序，不耽误出刊；本人要求的重新精选（strict=True）抛出 LLMPaused / 原异常。"""
-    w = fieldmod.cfg_selection().get("taste_weight", 0.4)
+    """精选的最后一步（ADR-0036、0037）：
+    1. 硬门槛：方法论文没和领域常用方法比较 → 去掉（rigor.gate）；
+    2. 中稿评估 + 口味：总分 = 0.3·原分数 + 0.4·中稿评估 + 0.3·喜欢（没有口味时 0.4·原分数 + 0.6·中稿评估），
+       中稿评估低于 selection.min_accept（默认 5）的不进精选；
+    模型不可用时：每日流程（strict=False）只用门槛 + 原分数，不耽误出刊；本人要求的重新精选（strict=True）抛出。"""
+    from . import rigor, results
+
+    sel = fieldmod.cfg_selection()
+    rows = results.all_rows()
+    std = rigor.standards(rows)
+    kept, dropped = [], 0
+    for c in cands:
+        m = store.load(c["pid"]) or {}
+        qr = store.load_quickread(c["pid"]) or {}
+        ev = rigor.evidence(c["pid"], rows, std)
+        c["evidence"] = ev
+        c["evidence_text"] = rigor.text(ev)
+        why = rigor.gate(m, qr, ev)
+        if why:
+            dropped += 1
+            continue
+        kept.append(c)
+    log(f"硬门槛：{len(cands)} 篇候选去掉 {dropped} 篇（方法论文没和领域常用方法比较）")
+    pool = kept[:max(room * 3, 30)]
     try:
-        likes = judge(cands)
+        js = judge(pool)
     except llm.LLMPaused as e:
         if strict:
             raise
-        log(f"口味重排跳过（额度）：{e}")
-        likes = {}
-    except Exception as e:  # noqa: BLE001  口味重排失败不影响出刊
+        log(f"中稿评估 / 口味重排跳过（额度）：{e}")
+        js = {}
+    except Exception as e:  # noqa: BLE001  评估失败不影响出刊
         if strict:
             raise
-        log(f"口味重排跳过：{e}")
-        likes = {}
-    if not likes:
-        return cands[:room]
-    for c in cands:
-        t = likes.get(c["pid"])
-        if t:
-            c["base_total"] = c["total"]
-            c["like"], c["like_reason"] = t["like"], t["reason"]
-            c["total"] = round((1 - w) * c["total"] + w * t["like"], 4)
-    cands.sort(key=lambda c: -c["total"])
-    log(f"口味重排：{len(likes)} 篇候选，参考 {len(rated())} 条评价")
-    return cands[:room]
+        log(f"中稿评估 / 口味重排跳过：{e}")
+        js = {}
+    if not js:
+        return kept[:room]
+    min_acc = sel.get("min_accept", 5)
+    out = []
+    for c in pool:
+        j = js.get(c["pid"])
+        if not j:
+            continue
+        c["base_total"] = c["total"]
+        c["accept"], c["like"], c["like_reason"] = j["accept"], j["like"], j["reason"]
+        if j["accept"] < min_acc:
+            continue
+        if j["like"] is None:
+            c["total"] = round(0.4 * c["total"] + 0.6 * j["accept"] / 10, 4)
+        else:
+            c["total"] = round(0.3 * c["total"] + 0.4 * j["accept"] / 10 + 0.3 * j["like"], 4)
+        out.append(c)
+    out.sort(key=lambda c: -c["total"])
+    log(f"中稿评估 + 口味：评估 {len(js)} 篇，{len(out)} 篇达到门槛（中稿评估 ≥ {min_acc}），取 {min(room, len(out))} 篇")
+    return out[:room]
 
 
 def new_since_profile() -> int:
