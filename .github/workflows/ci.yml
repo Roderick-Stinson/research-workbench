@@ -23,4 +23,5 @@ jobs:
           WB_E2E_DIR="$RUNNER_TEMP/wb_e2e" bash tests/e2e.sh
       - name: 检查没有误提交的密钥 / 个人信息
         run: |
-          ! grep -rnE "sk-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{20,}|hf_[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{30,}|[0-9]{8,10}:[A-Za-z0-9_-]{30,}" --exclude-dir=.git .
+          # 只扫仓库跟踪的文本文件（测试生成的 .pyc 等不算）
+          ! git grep -nIE "sk-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{20,}|hf_[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{30,}|[0-9]{8,10}:[A-Za-z0-9_-]{30,}"
