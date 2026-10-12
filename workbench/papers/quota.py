@@ -95,7 +95,9 @@ def pool(snap: dict, model: str, min_5h: float = 1, min_7d: float = 1) -> dict:
             reasons.append(f"凭据 {c['id']} 冷却到 {time.strftime('%H:%M', time.localtime(cd))}")
             waits.append(cd)
         for w, lim in ((w5, min_5h), (w7, min_7d)):
-            if w and w["remaining"] < lim:
+            # 重置时间已过：窗口已经恢复。GPT-Load 只在有请求经过时才刷新观测，旧快照里的"剩 0%"不能当真，
+            # 否则我们不发请求 → 快照不刷新 → 一直以为没额度（2026-10-13 实际发生过）
+            if w and w["remaining"] < lim and not (w.get("reset_at") and w["reset_at"] <= now):
                 reasons.append(f"凭据 {c['id']} {w['label']} 剩 {w['remaining']:.0f}%")
                 waits.append(w["reset_at"])
         if waits:
