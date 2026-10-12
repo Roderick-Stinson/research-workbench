@@ -209,6 +209,10 @@ class TestResultsTable(unittest.TestCase):
         self.assertNotEqual(datasets.lookup("AIME25")["name"], datasets.lookup("AIME 2024")["name"])
         self.assertTrue(datasets.lookup("Avg.")["aggregate"])
         self.assertTrue(datasets.lookup("SomeNewBench")["pending"])
+        v = datasets.lookup("MATH (lv5*)")
+        self.assertEqual((v["name"], v["variant"]), ("MATH", "lv5*"))   # 子集写法并到父数据集
+        self.assertEqual(datasets.scale({"n_eval": 617}, v["full"], v["variant"])["status"], "subset")
+        self.assertIsNone(datasets.lookup("GSM8K (free generation)").get("variant"))
 
     def test_scale(self):
         from workbench.papers import datasets
@@ -228,34 +232,60 @@ class TestResultsTable(unittest.TestCase):
         self.assertEqual(results.canon_metric("Cost", "$", "math")[1:], ("cost", False))
         self.assertEqual(results.m_key("CoT SC (5-shots)"), results.m_key("CoT-SC"))
         self.assertEqual(results.m_key("AFlow (GPT-4o-mini)"), results.m_key("AFlow"))
+        self.assertEqual(results.m_key("DMoA (Few-shot + TTT)"), results.m_key("DMoA (Ours)"))
+        self.assertNotEqual(results.m_key("AFlow w/o search"), results.m_key("AFlow"))
         self.assertEqual(results.bb_key("gpt-4o-mini-2024-07-18"), results.bb_key("GPT-4o-mini"))
         self.assertEqual(results.bb_key("Qwen-3-8B"), results.bb_key("Qwen3-8B"))
         self.assertNotEqual(results.bb_key("Qwen2.5-7B"), results.bb_key("Qwen2.5-72B"))
 
-    def test_matrix(self):
+    def _rows(self):
         from workbench.papers import results
 
-        def row(pid, method, ds, v, prop=False, n=None, pub="2025-01-01"):
+        def row(pid, method, v, prop=False, n=None, pub="2025-01-01", bb="gpt-4o-mini"):
             sc = {"status": "subset" if n else "full", "n": n, "full": 1319, "split": None, "how": None, "where": None}
-            return {"pid": pid, "paper": pid, "published": pub, "method": method, "mkey": results.m_key(method), "is_proposed": prop,
-                    "task_raw": ds, "dataset": ds, "category": "math", "metric": "Accuracy", "metric_raw": "acc", "kind": "quality",
-                    "higher_better": True, "backbone": "gpt-4o-mini", "bkey": results.bb_key("gpt-4o-mini"), "value": v, "unit": "%" if v > 1 else None, "where": "T1",
-                    "scale": sc}
-        rows = [row("p1", "AFlow", "GSM8K", 93.5, True), row("p1", "CoT", "GSM8K", 87.0),
-                row("p2", "MaAS", "GSM8K", 0.928, True, n=500, pub="2025-02-01"), row("p2", "AFlow", "GSM8K", 91.0, n=500),
-                row("p2", "AFlow w/o search", "GSM8K", 80.0)]
-        t = results.matrix(rows, "math", results.bb_key("gpt-4o-mini"))
-        self.assertEqual(len(t["cols"]), 1)
+            return {"pid": pid, "paper": pid, "published": pub, "method": method, "method_raw": method, "name_status": "ok",
+                    "mkey": results.m_key(method), "is_proposed": prop, "task_raw": "GSM8K", "dataset": "GSM8K", "category": "math",
+                    "metric": "Accuracy", "metric_raw": "acc", "kind": "quality", "higher_better": True, "backbone": bb,
+                    "bkey": results.bb_key(bb), "value": v, "unit": "%" if v > 1 else None, "where": "T1", "scale": sc,
+                    "code": {"status": "open", "url": "https://github.com/x/y", "stars": 1}}
+        return [row("p1", "AFlow", 93.5, True), row("p1", "CoT", 87.0), row("p3", "CoT", 90.1, bb="gpt-4o"),
+                row("p2", "MaAS", 0.928, True, n=500, pub="2025-02-01"), row("p2", "AFlow", 91.0, n=500),
+                row("p2", "AFlow w/o search", 80.0)]
+
+    def test_dataset_table(self):
+        from workbench.papers import results
+        t = results.dataset_table(self._rows(), "GSM8K")
         cells = {mt["name"]: mt["cells"][0] for mt in t["rows"]}
         self.assertEqual(cells["AFlow"]["value"], 93.5)           # 优先方法自己的论文
         self.assertEqual(len(cells["AFlow"]["others"]), 1)
+        self.assertEqual(cells["CoT"]["value"], 87.0)             # 不分 backbone；转引取中位数那条
         self.assertEqual(cells["MaAS"]["value"], 92.8)            # 0.928 换算成百分数
+        self.assertEqual([mt["name"] for mt in t["rows"]], ["AFlow", "MaAS", "CoT"])  # 按主指标排序
+        self.assertEqual(len(cells["CoT"]["others"]), 1)
         self.assertEqual(cells["AFlow"]["rank"], 1)
-        self.assertEqual(cells["MaAS"]["rank"], 2)
         self.assertNotIn("AFlow w/o search", cells)               # 消融默认隐藏
-        self.assertTrue(t["cols"][0]["mixed"])                    # 全量与子集混在一列
-        self.assertEqual(t["rows"][0]["name"], "CoT")             # 通用基线在上
-        self.assertEqual(len(results.matrix(rows, "math", results.bb_key("gpt-4o-mini"), full_only=True)["rows"]), 2)
+        self.assertTrue(t["mixed"])                                # 全量与子集混在一起
+        self.assertEqual(t["rows"][0]["own"]["code"]["status"], "open")
+        self.assertIsNone(next(mt for mt in t["rows"] if mt["name"] == "CoT")["own"])
+        self.assertEqual(len(results.dataset_table(self._rows(), "GSM8K", full_only=True)["rows"]), 2)
+        self.assertEqual(results.board(self._rows(), "math")["tables"][0]["dataset"], "GSM8K")
+        self.assertEqual(results.board(self._rows(), "math", min_methods=9)["small"], [("GSM8K", 4)])
+
+    def test_codecheck(self):
+        from unittest import mock
+        from workbench.papers import codecheck as cc
+        resp = {"repos/a/b": (200, {"size": 10, "stargazers_count": 3}), "repos/a/b/contents": (200, [{"name": "README.md", "type": "file"}]),
+                "repos/a/c": (200, {"size": 10}), "repos/a/c/contents": (200, [{"name": "README.md", "type": "file"}, {"name": "src", "type": "dir"}]),
+                "repos/a/d": (404, None), "repos/a/e": (200, {"size": 0})}
+        with mock.patch.object(cc, "_gh", side_effect=lambda ep: resp[ep]):
+            self.assertEqual(cc.check_url("https://github.com/a/b")["status"], "readme_only")
+            self.assertEqual(cc.check_url("https://github.com/a/c")["status"], "open")
+            self.assertEqual(cc.check_url("https://github.com/a/d")["status"], "dead")
+            self.assertEqual(cc.check_url("https://github.com/a/e")["status"], "empty")
+            self.assertEqual(cc.check_url("https://anonymous.4open.science/r/X-1")["status"], "anonymous")
+            with mock.patch.object(cc.http, "get", return_value='<a href="https://github.com/a/c">code</a>'):
+                r = cc.check_url("https://proj.github.io/")
+                self.assertEqual((r["status"], r["url_checked"]), ("open", "https://github.com/a/c"))
 
 
 class TestResultsPipeline(unittest.TestCase):
@@ -291,11 +321,29 @@ class TestResultsPipeline(unittest.TestCase):
         results.rebuild_index(log=lambda *a: None)
         rows = results.all_rows()
         self.assertTrue(rows and all(r["dataset"] for r in rows))
-        t = results.matrix(rows, "math", results.bb_key("gpt-4o-mini"))
-        self.assertEqual([c["dataset"] for c in t["cols"]], ["GSM8K"])
-        self.assertIn("CoT", [mt["name"] for mt in t["rows"]])              # "Acc." 与 "accuracy" 合成一列
-        sts = {g["status"] for g in t["cols"][0]["scales"]}
+        t = results.dataset_table(rows, "GSM8K")
+        self.assertEqual([c["metric"] for c in t["cols"]], ["Accuracy"])   # "Acc." 与 "accuracy" 合成一列
+        self.assertIn("CoT", [mt["name"] for mt in t["rows"]])
+        sts = {g["status"] for g in t["scales"]}
         self.assertTrue(sts <= {"full", "subset"} and sts)
+        # 方法名核对：MASS 更正为 MANGO，原文里没有的方法不进表
+        from workbench.papers import namecheck
+        qr = store.load_quickread(pids[1])
+        qr["results"] += [{"method": "MASS", "is_proposed": False, "task": "GSM8K", "metric": "acc", "value": 70, "where": "T3"},
+                          {"method": "CountBug", "task": "GSM8K", "metric": "Accuracy", "value": 139.6, "where": "T3"},
+                          {"method": "Bogus Avg.", "task": "GSM8K", "metric": "acc", "value": 1, "where": "T3"}]
+        store.save_quickread(pids[1], qr)
+        store._cache.clear()
+        self.assertIn(pids[1], namecheck.pending())
+        namecheck.fill(namecheck.pending(), log=lambda *a: None)
+        results.rebuild_index(log=lambda *a: None)
+        names = {r["method"]: r for r in results.all_rows() if r["pid"] == pids[1]}
+        self.assertIn("MANGO", names)
+        self.assertTrue(names["MANGO"]["is_proposed"])
+        self.assertEqual(names["MANGO"]["name_status"], "renamed")
+        self.assertNotIn("MASS", names)
+        self.assertNotIn("Bogus Avg.", names)
+        self.assertNotIn("CountBug", names)                          # 百分比指标超出 0–100 不进表
 
 
 if __name__ == "__main__":

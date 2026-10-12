@@ -68,8 +68,8 @@ wb problem                              # 列出问题
 
 ## 其它
 ```bash
-wb results [数据集]           # 跨论文结果表（数字都来自原文，带出处与评测规模：全量 / 子集 / 未注明）
-wb results refresh            # 归类新数据集名、补评测规模、重建索引（每日流程会自动做）
+wb results [数据集]           # 跨论文结果表（数字都来自原文，带出处、评测规模、代码是否开源）
+wb results refresh            # 归类数据集名、补评测规模、核对方法名、核实代码、重建索引（每日流程会自动做）
 wb map show                   # 领域地图（每类没考虑到什么 = 找问题的入口）
 wb report show --period weekly | wb report hot
 wb daily run --steps harvest,judge,read   # 手动补跑某些步骤（一般不需要，cron 每天 01:00 跑、08:30 推送）

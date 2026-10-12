@@ -294,7 +294,7 @@ def cmd_map(a):
 def cmd_results(a):
     """wb results                   分类与数据集
     wb results <数据集>             这个数据集的全部报告（带评测规模）
-    wb results refresh [--limit N]  归类新数据集名 + 补评测规模（按回填预算）+ 重建索引"""
+    wb results refresh [--limit N]  归类新数据集名 + 补评测规模 / 方法名核对（按回填预算）+ 核实代码 + 重建索引"""
     from . import datasets, llm, results
 
     args = a.task or []
@@ -308,8 +308,16 @@ def cmd_results(a):
                 out["eval_sets"] = datasets.fill(todo, kind="backfill")["ok"]
             except llm.LLMPaused as e:
                 out["eval_sets"] = f"暂停：{e}"
+        from . import codecheck, namecheck
+        todo = namecheck.pending()[:a.limit] if a.limit else namecheck.pending()
+        if todo:
+            try:
+                out["names"] = namecheck.fill(todo, kind="backfill")["ok"]
+            except llm.LLMPaused as e:
+                out["names"] = f"暂停：{e}"
+        out["code"] = codecheck.run(limit=a.limit or 1000)
         out.update(results.rebuild_index())
-        out["pending"] = len(datasets.pending())
+        out["pending"] = {"eval_sets": len(datasets.pending()), "names": len(namecheck.pending())}
         return out_json(out)
     rows = results.all_rows()
     if not args:
@@ -328,7 +336,7 @@ def cmd_results(a):
         for r in g["rows"][:30]:
             s = r["scale"]
             sz = {"full": "全量", "subset": f"子集{s['n'] or ''}", "unknown": "?"}[s["status"]]
-            print(f"  {'*' if r['is_proposed'] else ' '} {r['value']:>8}  {r['method'][:30]:30}  {sz:8} {r['pid']}  {r.get('where') or ''}")
+            print(f"  {'*' if r['is_proposed'] else ' '} {r['value']:>8}  {r['method'][:30]:30}  {sz:8} 代码:{r['code']['status']:11} {r['pid']}  {r.get('where') or ''}")
     return None
 
 
@@ -384,7 +392,7 @@ def register(add):
     p = add("map", cmd_map, "领域地图：show / versions / rebuild")
     p.add_argument("action", choices=["show", "versions", "rebuild"])
     p.add_argument("--version", type=int)
-    p = add("results", cmd_results, "跨论文结果表：不给参数列数据集；<数据集> 看报告；refresh 归类 + 补评测规模 + 重建索引")
+    p = add("results", cmd_results, "跨论文结果表：不给参数列数据集；<数据集> 看报告；refresh 归类 + 补评测规模 / 方法名核对 + 核实代码 + 重建索引")
     p.add_argument("task", nargs="*")
     p.add_argument("--limit", type=int, default=0)
     p = add("report", cmd_report, "周报 / 月报 / 热点：build / show / hot")

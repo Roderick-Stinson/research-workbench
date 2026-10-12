@@ -12,6 +12,7 @@
   <span>发表 {{ (m.published or '-')[:10] }}</span>
   {% if m.venue %}<span class="badge ok">{{ m.venue }}</span>{% elif qr.venue_claim %}<span class="badge ok">{{ qr.venue_claim }}（作者自称）</span>{% endif %}
   {% for c in m.code_urls or [] %}<a class="badge" href="{{ c }}" target="_blank">{{ c.replace('https://github.com/', '') }}</a>{% endfor %}
+  {% if code_check %}<span class="badge {{ {'open':'ok','readme_only':'warn','empty':'warn','anonymous':'warn','dead':'bad'}.get(code_check.status, 'muted') }}" title="核实于 {{ code_check.checked_at[:10] }}">代码：{{ code_names[code_check.status] }}{% if code_check.stars %} ★{{ code_check.stars }}{% endif %}</span>{% endif %}
   {% if m.seed %}<span class="badge v">种子论文</span>{% endif %}
   {{ flags(x.st) }}
 </div>
@@ -42,7 +43,7 @@
 {% if qr.results %}
 <h2>抽取的结果 <span class="count">{{ qr.results|length }} 条 · 只取原文明确报告的数字</span></h2>
 <div class="box scroll-x"><table><thead><tr><th>方法</th><th>任务</th><th>指标</th><th>Backbone</th><th class="num">数值</th><th>出处</th></tr></thead><tbody>
-{% for r in qr.results %}<tr class="{{ 'best' if r.is_proposed }}"><td>{% if r.is_proposed %}<b>{{ r.method }}</b>{% else %}{{ r.method }}{% endif %}</td><td>{{ r.task }}</td><td>{{ r.metric }}</td><td class="small">{{ r.backbone or '' }}</td><td class="num">{{ fmt_num(r.value) }}{{ r.unit if r.unit and r.unit != '%' else ('%' if r.unit == '%' else '') }}</td><td class="small muted">{{ r.where }}</td></tr>{% endfor %}
+{% for r in qr.results %}{% set nc = ((qr.method_check or {}).names or {}).get(r.method) %}{% set prop = nc.is_proposed if nc else r.is_proposed %}{% set nm = nc.name if nc and nc.name else r.method %}<tr class="{{ 'best' if prop }}"><td>{% if prop %}<b>{{ nm }}</b>{% else %}{{ nm }}{% endif %}{% if nc and not nc.name %} <span class="badge bad" title="核对时在原文里找不到这个方法，结果表里不显示">原文中没有</span>{% elif nm != r.method %} <span class="small muted" title="抽取时写作 {{ r.method }}，已按原文更正">（原抽取：{{ r.method }}）</span>{% endif %}</td><td>{{ r.task }}</td><td>{{ r.metric }}</td><td class="small">{{ r.backbone or '' }}</td><td class="num">{{ fmt_num(r.value) }}{{ r.unit if r.unit and r.unit != '%' else ('%' if r.unit == '%' else '') }}</td><td class="small muted">{{ r.where }}</td></tr>{% endfor %}
 </tbody></table></div>
 {% endif %}
 {% if qr.quality %}

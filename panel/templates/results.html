@@ -1,112 +1,89 @@
 {% extends "base.html" %}
 {% block title %}结果表 · 实验工作台{% endblock %}
 {% macro scale_txt(s) -%}
-{%- if s.status == 'full' -%}全量{% if s.n %} {{ '{:,}'.format(s.n) }} 题{% endif %}
-{%- elif s.status == 'subset' -%}{% if s.n %}子集 {{ '{:,}'.format(s.n) }} 题{% else %}抽样 / 子集（题数未注明）{% endif %}
-{%- else -%}规模未注明{%- endif -%}
+{%- if s.status == 'full' -%}全量{% if s.n %} {{ '{:,}'.format(s.n) }}{% endif %}
+{%- elif s.status == 'subset' -%}子集{% if s.variant %} {{ s.variant|truncate(18) }}{% endif %}{% if s.n %} {{ '{:,}'.format(s.n) }}{% elif not s.variant %}（题数未注明）{% endif %}
+{%- else -%}未注明{%- endif -%}
 {%- endmacro %}
-{% macro full_txt(f) -%}{% if f and f.n %}全量 {{ '{:,}'.format(f.n) }}{% if f.split and f.split != '全部' %}（{{ f.split }}）{% endif %}{% else %}全量规模以论文为准{% endif %}{%- endmacro %}
+{% macro full_txt(f) -%}{% if f and f.n %}全量 {{ '{:,}'.format(f.n) }}{% if f.split and f.split != '全部' %}（{{ f.split }}）{% endif %}{% endif %}{%- endmacro %}
 {% macro cell_title(c) -%}
 {{ c.r.paper }}（{{ c.r.published[:7] }}）· {{ c.r.where or '出处未注明' }}
 评测：{{ scale_txt(c.r.scale) }}{% if c.r.scale.how %} — {{ c.r.scale.how }}{% endif %}
-原文写法：{{ c.r.method }} / {{ c.r.task_raw }} / {{ c.r.metric_raw }}{% if c.r.backbone %} / {{ c.r.backbone }}{% endif %}{% if c.scaled %}（原文为 {{ c.r.value }}，已换算成百分数）{% endif %}
+backbone：{{ c.r.backbone or '未注明' }}
+原文写法：{{ c.r.method_raw }} / {{ c.r.task_raw }} / {{ c.r.metric_raw }}{% if c.r.name_status == 'renamed' %}（方法名已按原文核对，抽取时写作"{{ c.r.method_raw }}"）{% endif %}{% if c.scaled %}（原文为 {{ c.r.value }}，已换算成百分数）{% endif %}
 {%- if c.others %}
-另有 {{ c.others|length }} 处报告：{% for o in c.others[:6] %}
-  {{ fmt_num(o.shown) }} — {{ o.paper|truncate(40) }} · {{ o.where or '' }} · {{ scale_txt(o.scale) }}{% endfor %}{% endif %}
+另有 {{ c.others|length }} 处报告：{% for o in c.others[:8] %}
+  {{ fmt_num(o.shown) }} — {{ o.paper|truncate(36) }} · {{ o.backbone or '?' }} · {{ scale_txt(o.scale) }}{% endfor %}{% endif %}
 {%- endmacro %}
-{% macro cell(c) -%}
-{%- if c -%}
-<a href="/paper/{{ c.r.pid }}" title="{{ cell_title(c) }}" class="v{{ ' r1' if c.rank == 1 }}{{ ' r2' if c.rank == 2 }}">{{ fmt_num(c.value) }}</a>
-{%- if c.r.scale.status == 'subset' %}<span class="sz sub">{{ c.r.scale.n or '抽样' }}</span>{% elif c.r.scale.status == 'unknown' %}<span class="sz unk">?</span>{% endif %}
-{%- if c.r.is_proposed %}<span class="own" title="这个数字来自该方法自己的论文">★</span>{% endif %}
-{%- if c.others %}<span class="more" title="{{ cell_title(c) }}">+{{ c.others|length }}</span>{% endif %}
-{%- else %}<span class="na">—</span>{% endif -%}
+{% macro code_badge(own) -%}
+{%- if not own -%}<span class="muted" title="论文库里没有这个方法的原论文">—</span>
+{%- else -%}{%- set c = own.code or {} -%}
+{%- if c.status == 'open' -%}<a class="badge ok" href="{{ c.url }}" target="_blank" title="{{ c.url }}">已开源{% if c.stars %} ★{{ c.stars }}{% endif %}</a>
+{%- elif c.status in ('readme_only', 'empty') -%}<a class="badge warn" href="{{ c.url }}" target="_blank" title="{{ c.url }}">{{ '只有 README' if c.status == 'readme_only' else '空仓库' }}</a>
+{%- elif c.status == 'anonymous' -%}<span class="badge warn" title="{{ c.url }}">匿名仓库（未公开）</span>
+{%- elif c.status == 'dead' -%}<span class="badge bad" title="{{ c.url }}">链接失效</span>
+{%- elif c.status == 'reachable' -%}<a class="badge" href="{{ c.url }}" target="_blank" title="能打开，但不是 GitHub，没核实内容">有链接</a>
+{%- elif c.status == 'none' -%}<span class="muted small">未开源</span>
+{%- else -%}<span class="muted" title="还没核实">?</span>{%- endif -%}
+{%- endif -%}
 {%- endmacro %}
-{% macro method_cell(mt) -%}
-<td class="m"><span class="mn">{{ mt.name }}</span>{% if mt.own %} <a class="small muted" href="/paper/{{ mt.own.pid }}" title="{{ mt.own.paper }}">{{ mt.own.published[:7] }}</a>{% endif %}</td>
-{%- endmacro %}
-{% macro scale_detail(cols, label) %}
-<h2>评测规模 <span class="count">每一列各论文实际评测了多少题</span></h2>
-<div class="box scales">
-{% for c in cols %}<div class="srow">
-  <div class="sh"><b>{{ label(c) }}</b>{% if c.mixed %} <span class="badge warn">规模不一，不能直接比</span>{% endif %}</div>
-  <div>{% for g in c.scales %}<div class="sg"><span class="badge {{ {'full':'ok','subset':'warn','unknown':'muted'}[g.status] }}">{{ scale_txt(g) }}</span>
-    {% if g.how %}<span class="small">{{ g.how }}</span>{% endif %}
-    <span class="small muted">— {% for pid, t in (g.papers.items()|list)[:6] %}<a href="/paper/{{ pid }}" title="{{ t }}">{{ t|truncate(26) }}</a>{{ '；' if not loop.last }}{% endfor %}{% if g.papers|length > 6 %} 等 {{ g.papers|length }} 篇{% endif %}</span></div>{% endfor %}</div>
-</div>{% endfor %}
-</div>
+{% macro ds_table(t, limit) %}
+<div class="box scroll-x"><table class="rtab">
+<thead><tr><th class="m">方法</th>{% for c in t.cols %}<th class="num">{{ c.metric }} {{ '↑' if c.hib else '↓' }}</th>{% endfor %}<th>评测规模</th><th>代码</th><th>数字出处</th></tr></thead>
+<tbody>
+{% for mt in t.rows[:limit] %}{% set mc = mt.main %}
+<tr>
+<td class="m"><span class="mn">{{ mt.name }}</span>{% if mt.config %}<div class="cfg">{{ mt.config }}</div>{% endif %}</td>
+{% for c in t.cols %}{% set cell = mt.cells.get(loop.index0) %}<td class="num">{% if cell %}<a href="/paper/{{ cell.r.pid }}" title="{{ cell_title(cell) }}" class="v{{ ' r1' if cell.rank == 1 }}{{ ' r2' if cell.rank == 2 }}">{{ fmt_num(cell.value) }}</a>{% if cell.others %}<span class="more" title="{{ cell_title(cell) }}">+{{ cell.others|length }}</span>{% endif %}{% else %}<span class="na">—</span>{% endif %}</td>{% endfor %}
+<td>{% if mc.r.scale.status == 'subset' %}<span class="sz sub" title="{{ mc.r.scale.how or '' }}">{{ scale_txt(mc.r.scale) }}</span>{% elif mc.r.scale.status == 'full' %}<span class="sz full">{{ scale_txt(mc.r.scale) }}</span>{% else %}<span class="sz unk">未注明</span>{% endif %}</td>
+<td>{{ code_badge(mt.own) }}</td>
+<td class="small">{% if mc.r.is_proposed %}<a href="/paper/{{ mc.r.pid }}" title="{{ mc.r.paper }}">原论文</a> <span class="muted">{{ mc.r.published[:7] }}</span>{% else %}<span class="muted">转引自</span> <a href="/paper/{{ mc.r.pid }}" title="{{ mc.r.paper }}">{{ mc.r.paper|truncate(22) }}</a>{% endif %}</td>
+</tr>{% endfor %}
+</tbody></table></div>
 {% endmacro %}
 
 {% block body %}
 <h1>跨论文结果表</h1>
-<p class="sub">像论文里的主表：同一类任务、同一个 backbone，行是方法，列是数据集 · 指标；<b>粗体</b>是本列最好，<u>下划线</u>第二。
-数字全部是原文报告值，鼠标悬停看出处、评测规模和原文写法，点击打开论文。</p>
+<p class="sub">每个数据集一张表：哪个方法、在哪个指标上、报告了多少，评测用了全量还是子集，代码有没有真的开源。<b>粗体</b>最好，<u>下划线</u>第二。
+数字都来自原文（优先方法自己的论文）；悬停看出处、backbone、原文写法和其它报告。</p>
 
 <div class="tabs" style="margin-top:6px">{% for c in cats %}<a class="{{ 'on' if opts.cat == c.key }}" href="{{ qs({}, cat=c.key) }}">{{ c.name }} <span class="muted small">{{ c.n_datasets }}</span></a>{% endfor %}</div>
-
-{% if view == 'dataset' %}
-{# ---------- 单个数据集：行 = 方法，列 = backbone ---------- #}
-<p><a href="{{ qs({}, cat=t.category) }}">← {{ cat_names[t.category] }}</a></p>
-<h2 style="margin-top:6px">{{ t.dataset }} <span class="count">{{ t.n_papers }} 篇论文 · {{ full_txt(t.full_size) }}</span></h2>
-<div class="pf rsel">指标：{% for m in t.metrics[:12] %}<a class="badge {{ 'run' if m.name == t.metric }}" href="{{ qs({'ds': t.dataset, 'full': opts.full, 'abl': opts.abl}, metric=m.name) }}">{{ m.name }}{% if m.kind == 'cost' %}（成本）{% endif %} <span class="muted">{{ m.n }}</span></a>{% endfor %}</div>
 <div class="pf rsel">
-  <a class="badge {{ 'run' if opts.full }}" href="{{ qs({'ds': t.dataset, 'metric': t.metric, 'abl': opts.abl}, full=0 if opts.full else 1) }}">{{ '✓ ' if opts.full }}只看全量评测</a>
-  <a class="badge {{ 'run' if opts.abl }}" href="{{ qs({'ds': t.dataset, 'metric': t.metric, 'full': opts.full}, abl=0 if opts.abl else 1) }}">{{ '✓ ' if opts.abl }}显示消融</a>
-</div>
-{% if t.cols %}
-<div class="box scroll-x"><table class="ptab">
-<thead><tr><th class="m">方法</th>{% for c in t.cols %}<th class="num">{{ c.backbone }}</th>{% endfor %}</tr>
-<tr class="sub2"><th class="m">{{ t.metric }} {{ '↑' if t.cols[0].hib else '↓' }}</th>{% for c in t.cols %}<th class="num">{{ c.n_papers }} 篇{% if c.mixed %} <span class="warnline" title="这一列混有不同评测规模">⚠</span>{% endif %}</th>{% endfor %}</tr></thead>
-<tbody>{% for mt in t.rows %}<tr>{{ method_cell(mt) }}{% for c in t.cols %}<td class="num">{{ cell(mt.cells.get(loop.index0)) }}</td>{% endfor %}</tr>{% endfor %}</tbody>
-</table></div>
-{% if t.hidden_ablations %}<p class="small muted">隐藏了 {{ t.hidden_ablations }} 个消融变体（w/o …）。</p>{% endif %}
-{% macro bl(c) %}{{ c.backbone }}{% endmacro %}
-{{ scale_detail(t.cols, bl) }}
-{% else %}<div class="empty"><p>这个数据集在当前筛选下没有数字。</p></div>{% endif %}
-
-{% elif t %}
-{# ---------- 分类 × backbone：行 = 方法，列 = 数据集 · 指标 ---------- #}
-<div class="pf rsel"><span class="muted small">Backbone</span>
-{% for b in bbs[:14] %}<a class="badge {{ 'run' if b.key == opts.bb }}" href="{{ qs(opts, bb=b.key) }}">{{ b.name }} <span class="muted">{{ b.papers }} 篇</span></a>{% endfor %}
-{% if bbs|length > 14 %}<details class="inl"><summary class="small">更多 {{ bbs|length - 14 }} 个</summary>{% for b in bbs[14:] %}<a class="badge {{ 'run' if b.key == opts.bb }}" href="{{ qs(opts, bb=b.key) }}">{{ b.name }} <span class="muted">{{ b.papers }}</span></a> {% endfor %}</details>{% endif %}
-</div>
-<div class="pf rsel">
-  <a class="badge {{ 'run' if opts.kind == 'quality' }}" href="{{ qs(opts, kind='quality', bb=None) }}">效果</a>
-  <a class="badge {{ 'run' if opts.kind == 'cost' }}" href="{{ qs(opts, kind='cost', bb=None) }}">成本</a>
+  <a class="badge {{ 'run' if opts.kind == 'quality' }}" href="{{ qs(opts, kind='quality') }}">效果</a>
+  <a class="badge {{ 'run' if opts.kind == 'cost' }}" href="{{ qs(opts, kind='cost') }}">成本</a>
   <span class="muted">·</span>
   <a class="badge {{ 'run' if opts.full }}" href="{{ qs(opts, full=0 if opts.full else 1) }}">{{ '✓ ' if opts.full }}只看全量评测</a>
   <a class="badge {{ 'run' if opts.abl }}" href="{{ qs(opts, abl=0 if opts.abl else 1) }}">{{ '✓ ' if opts.abl }}显示消融</a>
-  <a class="badge {{ 'run' if opts.all }}" href="{{ qs(opts, all=0 if opts.all else 1) }}">{{ '✓ ' if opts.all }}含只有一篇论文的数据集</a>
 </div>
-<p class="legend small muted"><b class="ink">粗体</b> 本列最好 · <u class="ink">下划线</u> 第二 ·
-<span class="sz sub">617</span> 子集 / 抽样（数字是题数）· <span class="sz unk">?</span> 原文没写规模 · 无标记 = 全量 ·
-★ 来自该方法自己的论文 · <span class="more">+2</span> 另有几处报告（悬停查看）· 表头日期 = 方法论文的发表月份</p>
 
-{% if t.cols %}
-<div class="box scroll-x"><table class="ptab">
-<thead>
-<tr><th class="m">方法</th>{% for c in t.cols %}<th class="num"><a href="{{ qs({'ds': c.dataset, 'metric': c.metric}) }}" title="这个数据集在所有 backbone 下的对比">{{ c.dataset }}</a></th>{% endfor %}</tr>
-<tr class="sub2"><th class="m"></th>{% for c in t.cols %}<th class="num">{{ c.metric }} {{ '↑' if c.hib else '↓' }}</th>{% endfor %}</tr>
-<tr class="sub2"><th class="m">评测规模</th>{% for c in t.cols %}<th class="num" title="{% for g in c.scales %}{{ scale_txt(g) }}：{{ g.papers|length }} 篇
-{% endfor %}">{{ full_txt(c.full_size) }}{% if c.mixed %}<br><span class="warnline">⚠ 规模不一</span>{% endif %}</th>{% endfor %}</tr>
-</thead>
-<tbody>
-{% set ns = namespace(sect=None) %}
-{% for mt in t.rows %}
-{% set sect = '有出处的方法（按发表时间）' if mt.own else '通用基线 / 库里没有原论文的方法' %}
-{% if sect != ns.sect %}{% set ns.sect = sect %}<tr class="sect"><td colspan="{{ t.cols|length + 1 }}">{{ sect }}</td></tr>{% endif %}
-<tr>{{ method_cell(mt) }}{% for c in t.cols %}<td class="num">{{ cell(mt.cells.get(loop.index0)) }}</td>{% endfor %}</tr>
+{% if view == 'dataset' %}
+<p><a href="{{ qs({}, cat=t.category) }}">← {{ cat_names[t.category] }}</a></p>
+<h2 class="dsh">{{ t.dataset }} <span class="count">{{ t.rows|length }} 个方法 · {{ t.n_papers }} 篇论文{% if full_txt(t.full_size) %} · {{ full_txt(t.full_size) }}{% endif %}</span>{% if t.mixed %}<span class="badge warn">规模不一，不能直接比</span>{% endif %}</h2>
+{% if t.rows %}{{ ds_table(t, 1000) }}{% else %}<div class="empty"><p>当前筛选下没有数字。</p></div>{% endif %}
+{% if t.hidden_ablations %}<p class="small muted">隐藏了 {{ t.hidden_ablations }} 个消融变体（w/o …）。</p>{% endif %}
+{% if t.metrics_all|length > t.cols|length %}<p class="small muted">其它指标：{% for m in t.metrics_all[t.cols|length:] %}{{ m.name }}（{{ m.n }}）{{ '、' if not loop.last }}{% endfor %}</p>{% endif %}
+{% if t.scales %}
+<h2>评测规模 <span class="count">{{ t.cols[0].metric }}：各论文实际评测了多少题</span></h2>
+<div class="box scales">{% for g in t.scales %}<div class="sg2"><span class="badge {{ {'full':'ok','subset':'warn','unknown':'muted'}[g.status] }}">{{ scale_txt(g) }}</span>
+  {% if g.how %}<span class="small">{{ g.how }}</span>{% endif %}
+  <span class="small muted">— {% for pid, tt in (g.papers.items()|list)[:8] %}<a href="/paper/{{ pid }}" title="{{ tt }}">{{ tt|truncate(26) }}</a>{{ '；' if not loop.last }}{% endfor %}{% if g.papers|length > 8 %} 等 {{ g.papers|length }} 篇{% endif %}</span></div>{% endfor %}</div>
+{% endif %}
+
+{% elif b and b.tables %}
+<div class="pf dsidx">{% for t in b.tables %}<a class="badge" href="#ds-{{ loop.index }}">{{ t.dataset }} <span class="muted">{{ t.rows|length }}</span></a>{% endfor %}</div>
+{% for t in b.tables %}
+<section class="dsec" id="ds-{{ loop.index }}">
+<h2 class="dsh"><a href="{{ qs({'ds': t.dataset, 'kind': opts.kind, 'full': opts.full, 'abl': opts.abl}) }}">{{ t.dataset }}</a>
+<span class="count">{{ t.rows|length }} 个方法 · {{ t.n_papers }} 篇论文{% if full_txt(t.full_size) %} · {{ full_txt(t.full_size) }}{% endif %}</span>{% if t.mixed %}<span class="badge warn" title="这一列混有全量与子集评测，点数据集名看各论文的评测设置">规模不一</span>{% endif %}</h2>
+{{ ds_table(t, 10) }}
+{% if t.rows|length > 10 %}<p class="small"><a href="{{ qs({'ds': t.dataset, 'kind': opts.kind, 'full': opts.full, 'abl': opts.abl}) }}">全部 {{ t.rows|length }} 个方法、评测规模明细 →</a></p>{% endif %}
+</section>
 {% endfor %}
-</tbody></table></div>
-<p class="small muted">{{ t.n_papers }} 篇论文 · {{ t.rows|length }} 个方法
-{%- if t.hidden_cols %} · 另有 {{ t.hidden_cols }} 列没显示（报告的论文少）{% endif %}
-{%- if t.hidden_ablations %} · 隐藏了 {{ t.hidden_ablations }} 个消融变体（w/o …）{% endif %}
-{%- if not opts.all %} · 只列至少两篇论文报告过的数据集{% endif %}。不同论文的提示词、划分、采样次数可能不同，跨论文的数字只能作参考，看清评测规模再比。</p>
-{% macro cl(c) %}{{ c.dataset }} · {{ c.metric }}{% endmacro %}
-{{ scale_detail(t.cols, cl) }}
-{% else %}<div class="empty"><p>这个 backbone 下还没有至少两篇论文共同报告的数据集。可以换个 backbone，或者打开"含只有一篇论文的数据集"。</p></div>{% endif %}
+{% if b.small %}<h2>其它数据集 <span class="count">{{ b.small|length }} 个，方法较少；点进去看</span></h2>
+<div class="pf">{% for d, n in b.small %}<a class="badge" href="{{ qs({'ds': d, 'kind': opts.kind}) }}">{{ d }} <span class="muted">{{ n }}</span></a>{% endfor %}</div>{% endif %}
 {% else %}<div class="empty"><p>还没有抽取到的结果。论文速读完成后会自动出现。</p></div>{% endif %}
 
-<p class="foot">评测规模已核对 {{ cover.checked }} / {{ cover.papers }} 篇论文（其余由每日流程按额度补齐，补齐前显示为 ?）
-{%- if cover.pending_names %} · {{ cover.pending_names }} 个数据集名还没归类，暂放在"其它"{% endif %}。</p>
+<p class="foot">评测规模已核对 {{ cover.checked }} / {{ cover.papers }} 篇；代码已核实 {{ cover.code_checked }} / {{ cover.papers }} 篇；
+方法名按原文更正了 {{ cover.renamed }} 处{%- if cover.pending_names %}；{{ cover.pending_names }} 个数据集名还没归类{% endif %}。
+代码一列看的是该方法自己论文给出的链接："只有 README"= 仓库在但代码没放出，"链接失效"= 仓库不存在或已设为私有，"未开源"= 论文没给代码链接。</p>
 {% endblock %}
