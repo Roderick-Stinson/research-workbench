@@ -1,10 +1,11 @@
-"""跨论文结果表（ADR-0027，ADR-0034 改版）：把每篇速读里抽取的数字汇成论文式的对比表。
+"""跨论文结果表（ADR-0027 → ADR-0034 → ADR-0035）。
 
-  分类（数学 / 代码 / 问答……）→ backbone → 表：行 = 方法，列 = 数据集 · 指标，格子 = 数值；每列最好加粗、第二下划线。
-  每个数字都带评测规模（全量 / 抽样或子集 / 未注明），能点回论文与表号。
+  分类（数学 / 代码 / 问答……）→ 每个数据集一张表：行 = 方法，列 = 指标，格子 = 这个方法在这个数据集上报告的成绩。
+  不按 backbone 拆（复现时自己跑）；每个数字仍带出处、评测规模（全量 / 子集 / 未注明）、backbone（悬停可见）。
+  每个方法标出它自己论文的代码是否真的开源（codecheck.py），方法名按原文核对过（namecheck.py）。
 
-只汇总，不改写数字（唯一的换算：同一列大多是百分数而这一条写成 0.xx 时乘 100，并在提示里注明）。
-数据集名归一与分类见 datasets.py；指标、backbone、方法名在这里做轻量归一，原始写法保留在提示里。
+同一方法在同一数据集、同一指标上有多处报告时：优先它自己的论文，其次全量评测，再次数值最高的那条；其余放在悬停提示里。
+只汇总，不改写数字（唯一的换算：同一列大多是百分数而这一条写成 0.xx 时乘 100，并注明）。
 """
 from __future__ import annotations
 
@@ -47,6 +48,9 @@ def canon_metric(raw: str | None, unit: str | None, category: str) -> tuple:
     return name, "quality", not LOWER_RX.search(low)
 
 
+PCT_METRICS = {"Accuracy", "Pass@1", "F1", "EM", "Success Rate", "Resolve Rate"}
+
+
 def bb_key(raw: str | None) -> str:
     b = (raw or "").strip().lower()
     b = re.sub(r"^(openai|anthropic|google|meta-llama|qwen|deepseek-ai|mistralai)/", "", b)
@@ -57,14 +61,23 @@ def bb_key(raw: str | None) -> str:
 
 
 ABLATION_RX = re.compile(r"\bw/o\b|\bwithout\b|ablat|\(-|\bonly\b|\bvariant\b|^\s*[-+]|−|\bremove", re.I)
-# 方法名后面的括号里如果只是 backbone / 样本数，就不算另一个方法
-PAREN_NOISE = re.compile(r"\(\s*(ours?|\d+[- ]?shots?|(gpt|claude|qwen|llama|deepseek|gemini|mistral|o\d)[^)]*)\s*\)", re.I)
+
+
+def base_name(raw: str | None) -> str:
+    """方法的基本名：去掉括号里的配置 / backbone / "Ours"。"DMoA (Few-shot + TTT)" → "DMoA"。"""
+    b = re.sub(r"\s*[(（\[].*?[)）\]]", "", raw or "").strip()
+    b = re.sub(r"\bours\b|[*†‡§]+", "", b, flags=re.I).strip(" -_:")
+    return b or (raw or "?").strip()
+
+
+def row_name(raw: str | None) -> str:
+    """表里一行的名字：配置并到基本名；消融（含括号里的 w/o …）保留全名，单独一行。"""
+    return (raw or "?").strip() if ABLATION_RX.search(raw or "") else base_name(raw)
 
 
 def m_key(raw: str | None) -> str:
-    m = PAREN_NOISE.sub("", (raw or "").lower())
-    m = re.sub(r"\bours\b|[*†‡§]+", "", m)
-    return re.sub(r"[\s\-_]+", "", m).strip() or "?"
+    """同一方法的不同配置并成一行（消融 w/o … 仍是单独一行，默认隐藏）。"""
+    return re.sub(r"[\s\-_]+", "", row_name(raw).lower()) or "?"
 
 
 _own = {}
@@ -77,7 +90,7 @@ def owners(rows: list) -> dict:
         o = {}
         for r in rows:
             if r["is_proposed"] and (r["mkey"] not in o or r["published"] < o[r["mkey"]]["published"]):
-                o[r["mkey"]] = {"pid": r["pid"], "paper": r["paper"], "published": r["published"]}
+                o[r["mkey"]] = {"pid": r["pid"], "paper": r["paper"], "published": r["published"], "code": r.get("code")}
         _own.update(k=k, v=o)
     return _own["v"]
 
@@ -88,9 +101,24 @@ def index_path():
     return config.home() / "reports" / "results_index.json"
 
 
+_SUP = str.maketrans("0123456789+-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻")
+
+
+def _clean_name(n: str) -> str:
+    """显示用：全角括号、LaTeX（$\\mathcal{ANN}$ → ANN，E$^3$ → E³）、多余空白。"""
+    n = (n or "?").replace("（", " (").replace("）", ")")
+    n = re.sub(r"\\[a-zA-Z]+\{([^{}]*)\}", r"\1", n)
+    n = re.sub(r"\^\{?([0-9+\-]+)\}?", lambda m: m.group(1).translate(_SUP), n)
+    n = re.sub(r"\\[a-zA-Z]+|\\[,;:! ]", " ", n)
+    n = re.sub(r"[${}]", "", n)
+    return re.sub(r"\s+", " ", n).replace("( ", "(").strip() or "?"
+
+
 def build_rows() -> list:
+    from . import codecheck, namecheck
+
     reg = datasets.registry()
-    rows = []
+    rows, codes = [], {}
     for m in store.all_papers():
         if m.get("intake", {}).get("state") != "relevant":
             continue
@@ -102,16 +130,29 @@ def build_rows() -> list:
             ds = datasets.lookup(r.get("task"), reg)
             if ds.get("aggregate"):
                 continue
+            raw = (r.get("method") or "?").strip()
+            name, prop, nstat = namecheck.corrected(qr, raw)
+            if nstat == "missing":
+                continue  # 核对后原文里找不到这个方法：抽错了，不进表
+            name = _clean_name(name)
+            if nstat == "renamed" and name == _clean_name(raw):
+                nstat = "ok"
             ev = evs.get(datasets.key(r.get("task"))) or evs.get(datasets.key(ds["name"]))
             metric, mkind, hib = canon_metric(r.get("metric"), r.get("unit"), ds["category"])
+            if metric in PCT_METRICS and not 0 <= r["value"] <= 100:
+                continue  # 百分比指标却超出 0–100：多半是题数之类抽错了，不进表
+            if m["id"] not in codes:
+                c = codecheck.load(m["id"]) or {}
+                codes[m["id"]] = {"status": c.get("status") or "unchecked", "url": c.get("url"), "stars": c.get("stars")}
             rows.append({
                 "pid": m["id"], "paper": qr.get("title_zh") or m.get("title"), "orig_title": m.get("title"),
-                "published": m.get("published") or "", "method": (r.get("method") or "?").strip(), "mkey": m_key(r.get("method")),
-                "is_proposed": bool(r.get("is_proposed")), "task_raw": (r.get("task") or "").strip(), "dataset": ds["name"],
+                "published": m.get("published") or "", "method": name, "method_raw": raw, "name_status": nstat,
+                "mkey": m_key(name), "is_proposed": bool(r.get("is_proposed")) if prop is None else bool(prop),
+                "task_raw": (r.get("task") or "").strip(), "dataset": ds["name"],
                 "category": ds["category"], "pending": bool(ds.get("pending")), "metric": metric, "metric_raw": (r.get("metric") or "").strip(),
                 "kind": mkind, "higher_better": hib, "backbone": (r.get("backbone") or "").strip(), "bkey": bb_key(r.get("backbone")),
-                "value": r["value"], "unit": r.get("unit"), "where": r.get("where"),
-                "scale": datasets.scale(ev, ds.get("full")), "has_eval": "eval_sets" in qr})
+                "value": r["value"], "unit": r.get("unit"), "where": r.get("where"), "code": codes[m["id"]],
+                "scale": datasets.scale(ev, ds.get("full"), ds.get("variant")), "has_eval": "eval_sets" in qr})
     return rows
 
 
@@ -133,7 +174,10 @@ def all_rows() -> list:
     except OSError:
         return build_rows()
     if _idx.get("mt") != mt:
-        _idx.update(mt=mt, rows=(read_json(p, {}) or {}).get("rows") or [])
+        rows = (read_json(p, {}) or {}).get("rows") or []
+        if rows and "code" not in rows[0]:  # 旧版本的索引：字段不全，现算
+            rows = build_rows()
+        _idx.update(mt=mt, rows=rows)
     return _idx["rows"]
 
 
@@ -149,20 +193,6 @@ def categories(rows: list) -> list:
             for k, n in datasets.CATEGORIES if k in c]
 
 
-def backbones(rows: list, category: str, kind: str = "quality") -> list:
-    c = defaultdict(lambda: {"cells": 0, "papers": set(), "names": Counter()})
-    for r in rows:
-        if r["category"] == category and r["kind"] == kind:
-            x = c[r["bkey"]]
-            x["cells"] += 1
-            x["papers"].add(r["pid"])
-            x["names"][r["backbone"] or "未注明"] += 1
-    out = [{"key": k, "name": v["names"].most_common(1)[0][0] if k else "未注明", "cells": v["cells"], "papers": len(v["papers"])}
-           for k, v in c.items()]
-    out.sort(key=lambda x: (x["key"] == "", -x["papers"], -x["cells"]))
-    return out
-
-
 def _scaled_value(r: dict, pct_col: bool) -> tuple:
     v = r["value"]
     if pct_col and r["kind"] == "quality" and r.get("unit") != "%" and 0 <= v <= 1:
@@ -170,107 +200,97 @@ def _scaled_value(r: dict, pct_col: bool) -> tuple:
     return v, False
 
 
-def pivot(sel: list, col_of, min_papers: int = 2, max_cols: int = 16, ablations: bool = False, col_order=None,
-          own: dict | None = None) -> dict:
-    """行 = 方法，列 = col_of(r) 的取值。同一方法在同一列多处报告时：优先它自己的论文，其次全量评测，再次最新的论文。"""
-    by_col = defaultdict(list)
-    for r in sel:
-        by_col[col_of(r)].append(r)
-    cols = [{"key": k, "n_papers": len({r["pid"] for r in rs}), "rows": rs} for k, rs in by_col.items()]
-    cols = [c for c in cols if c["n_papers"] >= min_papers]
-    cols.sort(key=col_order or (lambda c: -c["n_papers"]))
-    hidden_cols = max(0, len(cols) - max_cols)
-    cols = cols[:max_cols]
+def _pick_order(rs: list, c: dict) -> list:
+    """同一方法、同一格的多处报告排序，第一条显示：方法自己的论文（取其中最好的一条）> 全量评测的转引 > 其它转引；
+    转引取中位数那条（不同论文设置不同，取最高值会挑出偶然的高分）。"""
+    sgn = -1 if c["hib"] else 1
+    val = lambda r: _scaled_value(r, c["pct"])[0]  # noqa: E731
+    own = sorted([r for r in rs if r["is_proposed"]], key=lambda r: sgn * val(r))
+    rest = [r for r in rs if not r["is_proposed"]]
+    pool = [r for r in rest if r["scale"]["status"] == "full"] or rest
+    pool = sorted(pool, key=val)
+    mid = [pool[(len(pool) - 1) // 2]] if pool else []
+    return own + mid + [r for r in rest if r not in mid]
 
+
+def dataset_table(rows: list, dataset: str, kind: str = "quality", full_only: bool = False, ablations: bool = False,
+                  max_metrics: int = 3, own: dict | None = None, min_metric_frac: float = 0.0) -> dict:
+    """一个数据集：行 = 方法，列 = 指标（报告最多的几个）。不分 backbone。"""
+    sel = [r for r in rows if r["dataset"] == dataset and r["kind"] == kind and (not full_only or r["scale"]["status"] == "full")]
+    own = own if own is not None else owners(rows)
+    mcount = defaultdict(set)
+    for r in sel:
+        mcount[r["metric"]].add(r["mkey"])
+    metrics = sorted(mcount, key=lambda k: -len(mcount[k]))
+    cols = []
+    top = len(mcount[metrics[0]]) if metrics else 0
+    for met in [m for m in metrics if len(mcount[m]) >= max(1, min_metric_frac * top)][:max_metrics]:
+        rs = [r for r in sel if r["metric"] == met]
+        vals = sorted(r["value"] for r in rs)
+        cols.append({"metric": met, "hib": rs[0]["higher_better"], "pct": vals[len(vals) // 2] > 1.5, "n": len(mcount[met])})
     methods = {}
     for ci, c in enumerate(cols):
-        vals = sorted(r["value"] for r in c["rows"])
-        pct_col = vals[len(vals) // 2] > 1.5
-        c["hib"] = c["rows"][0]["higher_better"]
         cand = defaultdict(list)
-        for r in c["rows"]:
-            cand[r["mkey"]].append(r)
+        for r in sel:
+            if r["metric"] == c["metric"]:
+                cand[r["mkey"]].append(r)
         for mk, rs in cand.items():
-            rs = sorted(rs, key=lambda r: (not r["is_proposed"], r["scale"]["status"] != "full", _neg_date(r["published"])))
-            v, scaled = _scaled_value(rs[0], pct_col)
-            mt = methods.setdefault(mk, {"key": mk, "names": Counter(), "cells": {}, "own": None})
-            mt["names"][rs[0]["method"]] += 1
+            rs = _pick_order(rs, c)
+            v, scaled = _scaled_value(rs[0], c["pct"])
+            mt = methods.setdefault(mk, {"key": mk, "names": Counter(), "cells": {}, "own": own.get(mk)})
+            mt["names"][row_name(rs[0]["method"])] += 1
             mt["cells"][ci] = {"value": v, "scaled": scaled, "r": rs[0],
-                               "others": [dict(o, shown=_scaled_value(o, pct_col)[0]) for o in rs[1:]]}
-        # 评测规模：这一列里各论文用的什么设置
-        sc = {}
-        for r in c["rows"]:
-            s = r["scale"]
-            g = sc.setdefault((s["status"], s["n"]), {"status": s["status"], "n": s["n"], "full": s["full"], "how": s["how"], "papers": {}})
-            g["how"] = g["how"] or s["how"]
-            g["papers"][r["pid"]] = r["paper"]
-        c["scales"] = sorted(sc.values(), key=lambda g: ({"full": 0, "subset": 1, "unknown": 2}[g["status"]], -(g["n"] or 0)))
-        known = {g["status"] for g in c["scales"]} - {"unknown"}
-        c["mixed"] = len(known) > 1 or len({g["n"] for g in c["scales"] if g["status"] == "subset"}) > 1
-        del c["rows"]
-
-    for mk, mt in methods.items():
-        mt["own"] = (own or {}).get(mk)
-    rows, hidden_abl = [], 0
+                               "others": [dict(o, shown=_scaled_value(o, c["pct"])[0]) for o in rs[1:]]}
+    out, hidden = [], 0
     for mt in methods.values():
         mt["name"] = mt.pop("names").most_common(1)[0][0]
         mt["ablation"] = bool(ABLATION_RX.search(mt["name"]))
         if mt["ablation"] and not ablations:
-            hidden_abl += 1
-        else:
-            rows.append(mt)
-
-    for ci, c in enumerate(cols):  # 每列最好 / 第二
-        vs = sorted({mt["cells"][ci]["value"] for mt in rows if ci in mt["cells"]}, reverse=c["hib"])
-        for mt in rows:
+            hidden += 1
+            continue
+        first = mt["cells"].get(0) or next(iter(mt["cells"].values()))
+        mt["main"] = first  # 规模 / 出处看主指标那一格
+        mt["config"] = first["r"]["method"] if first["r"]["method"] != mt["name"] else None
+        out.append(mt)
+    for ci, c in enumerate(cols):
+        vs = sorted({mt["cells"][ci]["value"] for mt in out if ci in mt["cells"]}, reverse=c["hib"])
+        for mt in out:
             cell = mt["cells"].get(ci)
             if cell:
                 cell["rank"] = 1 if cell["value"] == vs[0] else (2 if len(vs) > 1 and cell["value"] == vs[1] else 0)
-
-    # 行序（像论文一样）：通用基线（库里没有它自己的论文）在上，按覆盖列数；有出处的方法按发表时间
-    rows.sort(key=lambda mt: (mt["own"] is not None, -len(mt["cells"]) if mt["own"] is None else 0,
-                              (mt["own"] or {}).get("published") or "", mt["name"].lower()))
-    return {"cols": cols, "rows": [mt for mt in rows if mt["cells"]], "hidden_cols": hidden_cols, "hidden_ablations": hidden_abl,
-            "n_papers": len({r["pid"] for r in sel})}
-
-
-def matrix(rows: list, category: str, bkey: str, kind: str = "quality", full_only: bool = False,
-           ablations: bool = False, single: bool = False, max_cols: int = 16) -> dict:
-    """分类 × backbone 的论文式对比表：列 = 数据集 · 指标。"""
-    sel = [r for r in rows if r["category"] == category and r["kind"] == kind and r["bkey"] == bkey
-           and (not full_only or r["scale"]["status"] == "full")]
-    pop = Counter()
+    hib0 = cols[0]["hib"] if cols else True
+    out.sort(key=lambda mt: (0 not in mt["cells"], -(mt["cells"][0]["value"]) if 0 in mt["cells"] and hib0
+                             else (mt["cells"][0]["value"] if 0 in mt["cells"] else 0), mt["name"].lower()))
+    # 评测规模明细（主指标）
+    sc = {}
     for r in sel:
-        pop[r["dataset"]] += 1
-    t = pivot(sel, lambda r: (r["dataset"], r["metric"]), 1 if single else 2, max_cols, ablations,
-              col_order=lambda c: (-pop[c["key"][0]], c["key"][0], -c["n_papers"]), own=owners(rows))
-    for c in t["cols"]:
-        c["dataset"], c["metric"] = c["key"]
-        c["full_size"] = datasets.FULL.get(c["dataset"]) or next(({"split": None, "n": g["full"]} for g in c["scales"] if g["full"]), None)
-    return dict(t, category=category, bkey=bkey, kind=kind, full_only=full_only)
+        if cols and r["metric"] == cols[0]["metric"]:
+            s_ = r["scale"]
+            g = sc.setdefault((s_["status"], s_["n"]), {"status": s_["status"], "n": s_["n"], "full": s_["full"], "how": s_["how"], "papers": {}})
+            g["how"] = g["how"] or s_["how"]
+            g["papers"][r["pid"]] = r["paper"]
+    scales = sorted(sc.values(), key=lambda g: ({"full": 0, "subset": 1, "unknown": 2}[g["status"]], -(g["n"] or 0)))
+    known = {g["status"] for g in scales} - {"unknown"}
+    cat = sel[0]["category"] if sel else next((r["category"] for r in rows if r["dataset"] == dataset), "other")
+    return {"dataset": dataset, "category": cat, "cols": cols, "rows": out, "hidden_ablations": hidden,
+            "n_papers": len({r["pid"] for r in sel}), "full_size": datasets.FULL.get(dataset), "scales": scales,
+            "mixed": len(known) > 1 or len({g["n"] for g in scales if g["status"] == "subset"}) > 1,
+            "metrics_all": [{"name": m, "n": len(mcount[m])} for m in metrics]}
 
 
-def dataset_view(rows: list, dataset: str, metric: str | None = None, full_only: bool = False, ablations: bool = False) -> dict:
-    """单个数据集：选一个指标，行 = 方法，列 = backbone。"""
-    mine = [r for r in rows if r["dataset"] == dataset]
-    mets = Counter((r["metric"], r["kind"]) for r in mine)
-    metrics = [{"name": m, "kind": k, "n": n} for (m, k), n in sorted(mets.items(), key=lambda x: (x[0][1] != "quality", -x[1]))]
-    metric = metric or (metrics[0]["name"] if metrics else None)
-    sel = [r for r in mine if r["metric"] == metric and (not full_only or r["scale"]["status"] == "full")]
-    names = defaultdict(Counter)
-    for r in sel:
-        names[r["bkey"]][r["backbone"] or "未注明"] += 1
-    t = pivot(sel, lambda r: r["bkey"], 1, 12, ablations, col_order=lambda c: (c["key"] == "", -c["n_papers"]), own=owners(rows))
-    for c in t["cols"]:
-        c["backbone"] = names[c["key"]].most_common(1)[0][0] if c["key"] else "未注明"
-    category = mine[0]["category"] if mine else "other"
-    return dict(t, dataset=dataset, metric=metric, metrics=metrics, category=category, full_size=datasets.FULL.get(dataset),
-                full_only=full_only)
-
-
-def _neg_date(d: str) -> str:
-    """日期降序排序用：把 '2025-03-01' 变成可升序比较的反序串。"""
-    return "".join(chr(0x7f - ord(ch)) for ch in (d or ""))
+def board(rows: list, category: str, kind: str = "quality", full_only: bool = False, ablations: bool = False,
+          min_methods: int = 3, max_tables: int = 15) -> dict:
+    """一个分类下方法最多的几个数据集各一张表（每张只放主要指标）；其余数据集列成清单，点进去看。"""
+    own = owners(rows)
+    mk = defaultdict(set)
+    for r in rows:
+        if r["category"] == category and r["kind"] == kind:
+            mk[r["dataset"]].add(r["mkey"])
+    names = sorted(mk, key=lambda d: (-len(mk[d]), d))
+    big = [d for d in names if len(mk[d]) >= min_methods][:max_tables]
+    tables = [dataset_table(rows, d, kind, full_only, ablations, max_metrics=2, own=own, min_metric_frac=0.25) for d in big]
+    tables = [t for t in tables if t["rows"]]
+    return {"category": category, "kind": kind, "tables": tables, "small": [(d, len(mk[d])) for d in names if d not in big]}
 
 
 # ---------------- 单个数据集（CLI / MCP / 复现参照）----------------

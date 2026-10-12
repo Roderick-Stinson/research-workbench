@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 
 from workbench import config
 from workbench.papers import field as fieldmod
-from workbench.papers import datasets, fieldmap, ideate, reports, results, store
+from workbench.papers import codecheck, datasets, fieldmap, ideate, reports, results, store
 from workbench.util import read_json
 
 
@@ -24,10 +24,10 @@ def _titles(pids):
 
 
 def _qs(base: dict, **kw) -> str:
-    """结果表页面的链接：在当前选择上改几项。bb 允许空串（= 未注明 backbone）。"""
+    """结果表页面的链接：在当前选择上改几项。"""
     d = dict(base)
     d.update(kw)
-    keep = {k: v for k, v in d.items() if v is not None and v != 0 and (v != "" or k == "bb") and not (k == "kind" and v == "quality")}
+    keep = {k: v for k, v in d.items() if v not in (None, 0, "") and not (k == "kind" and v == "quality")}
     return "/results?" + urlencode(keep)
 
 
@@ -42,26 +42,27 @@ def register(app, render):
         return render(request, "map.html", m=m, versions=vers, titles=titles, field=fieldmod.field())
 
     @app.get("/results", response_class=HTMLResponse)
-    def results_page(request: Request, cat: str = "", bb: str | None = None, kind: str = "quality", full: int = 0,
-                     abl: int = 0, all: int = 0, ds: str = "", metric: str = "", task: str = ""):
+    def results_page(request: Request, cat: str = "", kind: str = "quality", full: int = 0, abl: int = 0,
+                     ds: str = "", task: str = ""):
         rows = results.all_rows()
         cats = results.categories(rows)
         ds = ds or (results.norm_task(task) if task else "")
-        n_pap = {r["pid"] for r in rows}
-        cover = {"papers": len(n_pap), "checked": len({r["pid"] for r in rows if r.get("has_eval")}),
-                 "pending_names": len({r["task_raw"] for r in rows if r.get("pending")})}
-        opts = {"cat": cat, "bb": bb, "kind": kind, "full": full, "abl": abl, "all": all}
-        if ds:
-            v = results.dataset_view(rows, ds, metric or None, full_only=bool(full), ablations=bool(abl))
-            return render(request, "results.html", cats=cats, view="dataset", t=v, cover=cover, opts=dict(opts, cat=v["category"]),
-                          cat_names=dict(datasets.CATEGORIES), qs=_qs)
-        cat = cat or (cats[0]["key"] if cats else "")
         kind = kind if kind in ("quality", "cost") else "quality"
-        bbs = results.backbones(rows, cat, kind) if cat else []
-        bb = bb if bb is not None and any(b["key"] == bb for b in bbs) else (bbs[0]["key"] if bbs else "")
-        t = results.matrix(rows, cat, bb, kind, full_only=bool(full), ablations=bool(abl), single=bool(all)) if cat else None
-        return render(request, "results.html", cats=cats, view="matrix", t=t, bbs=bbs, cover=cover,
-                      opts=dict(opts, cat=cat, bb=bb, kind=kind), cat_names=dict(datasets.CATEGORIES), qs=_qs)
+        pids = {r["pid"] for r in rows}
+        cover = {"papers": len(pids), "checked": len({r["pid"] for r in rows if r.get("has_eval")}),
+                 "code_checked": len({r["pid"] for r in rows if r["code"]["status"] != "unchecked"}),
+                 "renamed": len({(r["pid"], r["method_raw"]) for r in rows if r["name_status"] == "renamed"}),
+                 "pending_names": len({r["task_raw"] for r in rows if r.get("pending")})}
+        if ds:
+            t = results.dataset_table(rows, ds, kind, full_only=bool(full), ablations=bool(abl), max_metrics=6)
+            opts = {"ds": ds, "kind": kind, "full": full, "abl": abl}
+            return render(request, "results.html", cats=cats, view="dataset", t=t, cover=cover, opts=dict(opts, cat=t["category"]),
+                          cat_names=dict(datasets.CATEGORIES), qs=_qs, code_names=codecheck.STATUS)
+        cat = cat or (cats[0]["key"] if cats else "")
+        b = results.board(rows, cat, kind, full_only=bool(full), ablations=bool(abl)) if cat else None
+        return render(request, "results.html", cats=cats, view="board", b=b, cover=cover,
+                      opts={"cat": cat, "kind": kind, "full": full, "abl": abl}, cat_names=dict(datasets.CATEGORIES), qs=_qs,
+                      code_names=codecheck.STATUS)
 
     @app.get("/ideas", response_class=HTMLResponse)
     def ideas_page(request: Request):

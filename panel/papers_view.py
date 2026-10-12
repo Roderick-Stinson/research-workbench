@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 from workbench import config
 from workbench.papers import field as fieldmod
-from workbench.papers import select, store
+from workbench.papers import codecheck, select, store
 from workbench.papers.pipeline import load_issue
 
 
@@ -104,7 +104,8 @@ def register(app, render):
             raise HTTPException(404, "没有这篇论文")
         x = _decorate(m)
         seeds = {s["arxiv"]: s.get("title") for s in fieldmod.seeds()}
-        return render(request, "paper.html", x=x, seeds=seeds, field=fieldmod.field())
+        return render(request, "paper.html", x=x, seeds=seeds, field=fieldmod.field(), code_check=codecheck.load(pid),
+                      code_names=codecheck.STATUS)
 
     @app.get("/paper/{pid}/explainer")
     def paper_explainer(pid: str):

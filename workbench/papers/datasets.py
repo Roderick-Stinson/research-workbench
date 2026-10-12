@@ -84,8 +84,23 @@ def registry() -> dict:
     return read_json(registry_path(), {}) or {}
 
 
+SUBSET_RX = re.compile(r"\b(lv|level|subset|sampled?|hard(est)?)\b|\blv ?\d|^\d+$", re.I)
+
+
+def _variant(raw: str):
+    """"MATH (lv5*)" / "GSM8K (subset)" 这类写法 → (父数据集, 子集说明)；只认 KNOWN 里的父数据集。"""
+    m = re.match(r"^(.+?)\s*[(（\[]\s*(.+?)\s*[)）\]]\s*$", (raw or "").strip())
+    if m and key(m.group(1)) in _KNOWN and SUBSET_RX.search(m.group(2)):
+        return _KNOWN[key(m.group(1))], m.group(2)
+    return None, None
+
+
 def lookup(raw: str | None, reg: dict | None = None) -> dict:
-    """原始数据集名 → {name, category, aggregate, full, pending}。pending：还没归类（暂按原名、分到其它）。"""
+    """原始数据集名 → {name, category, aggregate, full, pending, variant}。pending：还没归类（暂按原名、分到其它）。
+    variant：常见数据集的子集写法（如 "MATH (lv5*)"）并到父数据集，评测规模记为子集。"""
+    parent, var = _variant(raw)
+    if parent:
+        return dict(parent, aggregate=False, variant=var)
     k = key(raw)
     if not k:
         return {"name": "?", "category": "other", "aggregate": True, "full": None}
@@ -94,6 +109,9 @@ def lookup(raw: str | None, reg: dict | None = None) -> dict:
     reg = registry() if reg is None else reg
     hit = (reg.get("names") or {}).get(k)
     if hit:
+        parent, var = _variant(hit.get("name"))
+        if parent and not hit.get("aggregate"):
+            return dict(parent, aggregate=False, variant=var)
         kn = _KNOWN.get(key(hit.get("name")))  # 模型归到了某个 KNOWN 数据集
         return {"name": kn["name"] if kn else hit.get("name") or raw.strip(), "category": kn["category"] if kn else hit.get("category") or "other",
                 "aggregate": bool(hit.get("aggregate")), "full": kn["full"] if kn else None}
@@ -243,13 +261,15 @@ def fill(pids: list, kind: str = "daily", workers: int = 6, log=print) -> dict:
     return {"ok": ok, "failed": failed}
 
 
-def scale(ev: dict | None, full: dict | None) -> dict:
+def scale(ev: dict | None, full: dict | None, variant: str | None = None) -> dict:
     """一条结果的评测规模判定：full（全量）/ subset（抽样或子集）/ unknown（原文没写清楚）。
     题数和全量都知道时按数字比（官方全量优先于论文自己写的全量：论文常把过滤 / 抽样后的集合叫 test set）；
     没有题数时才看论文自己的说法。"""
     ev = ev or {}
     n, fs = ev.get("n_eval"), (full or {}).get("n") or ev.get("full_size")
-    if n and fs:
+    if variant:  # 名字里就写明是子集（如 MATH (lv5*)）
+        st = "subset"
+    elif n and fs:
         st = "subset" if n < fs else "full"
     elif ev.get("sampled") is True:
         st = "subset"
@@ -257,4 +277,7 @@ def scale(ev: dict | None, full: dict | None) -> dict:
         st = "full"
     else:
         st = "unknown"
-    return {"status": st, "n": n, "full": fs, "split": ev.get("split"), "how": ev.get("how"), "where": ev.get("where")}
+    how = ev.get("how")
+    if variant:
+        how = f"子集：{variant}" + (f"；{how}" if how else "")
+    return {"status": st, "n": n, "full": fs, "split": ev.get("split"), "how": how, "where": ev.get("where"), "variant": variant}

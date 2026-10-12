@@ -225,13 +225,19 @@ def explain_picks(day: str, iss: dict, log) -> dict:
 
 
 def results_table(day: str, iss: dict, log) -> dict:
-    """结果表（ADR-0034）：归类新出现的数据集名、补当期论文的评测规模、重建索引。老论文的评测规模由 resume 按回填预算补。"""
-    from . import datasets, results
+    """结果表（ADR-0034、0035）：归类新数据集名、补当期论文的评测规模与方法名核对、核实代码是否开源、重建索引。
+    老论文的评测规模与方法名核对由 resume 按回填预算补。"""
+    from . import codecheck, datasets, namecheck, results
 
     out = {"datasets": datasets.classify(log=log)}
     todo = datasets.pending(iss.get("candidates") or [])
     if todo:
         out["eval_sets"] = datasets.fill(todo, log=log)["ok"]
+    new = set(iss.get("candidates") or [])
+    todo = [p for p in namecheck.pending() if p in new]
+    if todo:
+        out["names"] = namecheck.fill(todo, log=log)["ok"]
+    out["code"] = codecheck.run(limit=300, log=log)  # 新论文 + 到期复查（没放代码的每周查一次）
     out.update(results.rebuild_index(log=log))
     return out
 
@@ -390,19 +396,25 @@ def resume(log=print) -> dict:
 
 
 def backfill_eval_sets(limit: int = 80, log=print) -> dict:
-    """老论文补评测规模（ADR-0034），受回填预算约束；每次最多 limit 篇，补完重建结果表索引。"""
+    """老论文补评测规模（ADR-0034）与方法名核对（ADR-0035），受回填预算约束；每次各最多 limit 篇，补完重建结果表索引。"""
     from . import datasets, results
 
-    todo = datasets.pending()[:limit]
-    if not todo:
-        return {"pending": 0}
-    try:
-        res = datasets.fill(todo, kind="backfill", log=log)
-        out = {"ok": res["ok"], "failed": len(res["failed"])}
-    except llm.LLMPaused as e:
-        out = {"paused": str(e)}
-    results.rebuild_index(log=log)
-    return dict(out, pending=len(datasets.pending()))
+    from . import namecheck
+
+    out = {}
+    for name, mod in (("eval_sets", datasets), ("names", namecheck)):
+        todo = mod.pending()[:limit]
+        if not todo:
+            continue
+        try:
+            res = mod.fill(todo, kind="backfill", log=log)
+            out[name] = {"ok": res["ok"], "failed": len(res["failed"]), "pending": len(mod.pending())}
+        except llm.LLMPaused as e:
+            out[name] = {"paused": str(e)}
+            break
+    if out:
+        results.rebuild_index(log=log)
+    return out or {"pending": 0}
 
 
 def alert(text: str) -> None:

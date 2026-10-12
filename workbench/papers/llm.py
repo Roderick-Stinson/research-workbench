@@ -292,6 +292,12 @@ def _fake(task: str, user: str):
         names = re.search(r"需要核对的数据集：(.*)", user).group(1).split("；")
         return {"eval_sets": [{"task": n, "split": "test", "n_eval": 100, "full_size": None, "sampled": True,
                                "how": "（假模型）随机抽样", "where": "Sec 4"} for n in names]}
+    if task == "namecheck":
+        items = []
+        for i, n in re.findall(r"^\[(\d+)\] (.*?)  ——", user, re.M):
+            items.append({"i": int(i), "name": None if n.startswith("Bogus") else ("MANGO" if n == "MASS" else n),
+                          "is_proposed": n in ("Ours", "MASS")})
+        return {"proposed": ["Ours"], "items": items}
     if task == "field-suggest":
         return {"description": "（假模型）新的方向描述", "subtopics": ["子主题 A"], "arxiv_keywords": ["multi-agent", "agentic"],
                 "changes": ["（假模型）根据本人提供的论文补充了描述"]}
