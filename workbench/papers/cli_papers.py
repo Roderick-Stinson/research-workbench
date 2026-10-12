@@ -43,6 +43,11 @@ def cmd_daily(a):
         print(pipeline.push(a.date, force=a.force))
     elif a.action == "resume":
         print(pipeline.resume())
+    elif a.action == "repick":
+        res = pipeline.repick(a.date, reason=a.reason or "")
+        if a.force:
+            res["push"] = pipeline.push(a.date, force=True)
+        return out_json(res)
     elif a.action == "status":
         iss = pipeline.load_issue(a.date or store.today())
         if a.json:
@@ -227,6 +232,10 @@ def cmd_field(a):
     f = fieldmod.field()
     if a.action == "show":
         return out_json(f)
+    from ..util import write_json
+    hist = wbstore.registry_dir() / "field.history"
+    hist.mkdir(parents=True, exist_ok=True)
+    write_json(hist / f"field-{now_iso().replace(':', '')}.json", f)  # 旧版本留底
     for kv in a.kv:
         k, v = kv.split("=", 1)
         try:
@@ -369,8 +378,9 @@ def cmd_report(a):
 
 
 def register(add):
-    p = add("daily", cmd_daily, "每日论文流程：run / push / status")
-    p.add_argument("action", choices=["run", "push", "status", "resume"])
+    p = add("daily", cmd_daily, "每日论文流程：run / push / status / resume / repick（按最新口味重新精选，--force 同时推送）")
+    p.add_argument("action", choices=["run", "push", "status", "resume", "repick"])
+    p.add_argument("--reason", help="repick：为什么重新精选（写进推送）")
     p.add_argument("--date", help="期号日期 YYYY-MM-DD（默认今天，北京时间）")
     p.add_argument("--steps", help="只跑这些步骤，逗号分隔")
     p.add_argument("--force", action="store_true")

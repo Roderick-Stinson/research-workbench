@@ -324,7 +324,9 @@ def render_telegram(iss: dict, update: bool = False) -> str:
     lines = [f"<b>{'🔄 更新 · ' if update else ''}📚 {e(iss['day'])} · 多智能体架构优化</b>"]
     picks = iss.get("picks") or []
     if picks:
-        lines.append(f"今日精选 {len(picks)} 篇（按质量，最多 10 篇）")
+        rp = (iss.get("replaced_picks") or [])[-1:] if update else []
+        lines.append(f"今日精选 {len(picks)} 篇（按质量{'与你的口味' if any(p.get('like') is not None for p in picks) else ''}，最多 10 篇）"
+                     + (f"\n已按你的要求重新精选{('：' + e(rp[0]['reason'])) if rp[0].get('reason') else ''}" if rp else ""))
         for p in picks:
             m = store.load(p["pid"]) or {}
             qr = store.load_quickread(p["pid"]) or {}
@@ -362,6 +364,27 @@ def render_telegram(iss: dict, update: bool = False) -> str:
                      + "\n".join(f"• {e(c)}" for c in (pp.get("changes") or [])[:5]))
     lines.append(f"<a href=\"{e(url)}/issue/{e(iss['day'])}\">在面板查看本期</a>")
     return "\n\n".join(lines)
+
+
+def repick(day: str | None = None, reason: str = "", log=print) -> dict:
+    """按最新的口味 / 评价重新精选本期（本人要求时）：原精选留在 replaced_picks，重新选、补精读、推送更新。"""
+    day = day or store.today()
+    iss = load_issue(day)
+    old = iss.get("picks") or []
+    for p in old:
+        m = store.load(p["pid"])
+        if m and (m.get("picked") or {}).get("day") == day:
+            m.pop("picked", None)
+            store.save(m)
+    iss.setdefault("replaced_picks", []).append({"at": now_iso(), "reason": reason, "picks": old})
+    iss["picks"] = []
+    save_issue(iss)
+    _step(iss, "choose", lambda: choose(day, iss, log), log)
+    _step(iss, "explain", lambda: explain_picks(day, iss, log), log)
+    keep = {p["pid"] for p in old} & {p["pid"] for p in iss["picks"]}
+    log(f"重新精选：{len(iss['picks'])} 篇，其中 {len(keep)} 篇与原精选相同")
+    return {"picks": [p["pid"] for p in iss["picks"]], "kept": sorted(keep),
+            "dropped": [p["pid"] for p in old if p["pid"] not in keep]}
 
 
 def push(day: str | None = None, force: bool = False) -> dict:
