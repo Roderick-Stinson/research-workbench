@@ -23,7 +23,8 @@ GENERIC = {
 }
 TOOLS = {"claudecode", "codex", "opencode", "openhands", "terminus2", "terminuskira", "sweagent", "minisweagent", "aider",
          "cursor", "geminicli", "ohmypi", "pi"}
-MODEL_RX = re.compile(r"^(gpt|claude|qwen|llama|deepseek|gemini|o\d|mistral|glm|kimi|grok|phi|gemma)", re.I)
+# 模型名（已去掉空格和连字符）：gpt4omini、gpt35turbo、claude37sonnet、qwen38b、o3mini……；注意 GPTSwarm 是方法，不是模型
+MODEL_RX = re.compile(r"^(gpt\d|claude\d|claude(sonnet|opus|haiku)|qwen\d|llama\d|deepseek|gemini|o\d|mistral|glm\d|kimi|grok|phi\d|gemma)", re.I)
 
 
 def _excluded(mkey: str) -> bool:
