@@ -13,13 +13,28 @@ description: 实验工作台的论文侧：用户说"这篇读过了 / 收藏 / 
 ```bash
 wb paper mark <论文> --read            # 读过了
 wb paper mark <论文> --fav             # 收藏
-wb paper mark <论文> --irrelevant      # 不相关（这篇不再进精选；目前还不作为负样本影响相关性判定）
+wb paper mark <论文> --irrelevant      # 不相关：这篇不再进精选，并作为反例影响以后的相关性判定（可加 --note 写原因）
 wb paper mark <论文> --reproduce       # 想复现（再按下面的复现流程走）
 wb paper mark <论文> --read --undo     # 撤销
 wb paper show <论文> [--json]          # 看速读、抽取的结果、质量评估
 wb paper ls --picked --day 2026-10-12  # 某天精选；--q 关键词；--facet optimizes=通信拓扑
 ```
 "今天有什么论文"：`wb daily status`、`wb paper ls --day <今天>`，或直接给面板链接 /issue。
+
+## 本人提供论文（"把这篇加进来"）
+```bash
+wb paper add 2502.04180                       # arXiv 号；也可以是链接、"标题"、服务器上的 PDF 路径，可一次给多个
+wb paper add "<标题>" --seed --why "和我的 claim 2 直接相关"   # 同时设为种子（需要有 arXiv 号）
+wb paper add /path/to/paper.pdf --explain     # 顺带做 8 步精读
+```
+直接进库（不再判相关性），立刻做速读；本人提供的论文不会再出现在每日精选里。
+
+## 更新研究画像（"根据这些论文更新我的方向"）
+```bash
+wb field suggest     # 根据种子、本人提供的论文、标为不相关的论文，起草新的描述 / 子主题 / 检索词（不写入）
+wb field apply       # 本人确认后才执行；旧版本自动留底在 registry/field.history/
+```
+先把 `wb field suggest` 的输出（改了什么、为什么、检索词增删）原样给用户看，**用户明确同意后**再 `wb field apply`。
 
 ## 研究方向与种子
 ```bash

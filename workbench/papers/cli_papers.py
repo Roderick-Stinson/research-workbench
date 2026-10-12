@@ -131,6 +131,12 @@ def cmd_paper(a):
             print(f"  我的标记：{ {k: v for k, v in st.items() if k != 'history'} }")
         if (store.pdir(pid) / "explainer.html").exists():
             print(f"  精读：{store.pdir(pid) / 'explainer.html'}")
+    elif a.action == "add":
+        from . import manual
+        if not a.ids:
+            raise SystemExit("用法：wb paper add <arXiv号 | 链接 | \"标题\" | /服务器上/的.pdf>... [--seed] [--why 原因] [--explain]")
+        res = manual.add(a.ids, seed=a.seed, why=a.why or "本人提供", explain=a.explain)
+        return out_json(res) if a.json else None
     elif a.action == "mark":
         keys = [k for k in ("read", "fav", "irrelevant", "reproduce") if getattr(a, k)]
         if not keys and not a.note:
@@ -185,6 +191,23 @@ def cmd_field(a):
             raise SystemExit("用法：wb field init <examples/fields/xxx.json 或示例名，如 mas-arch-opt>")
         print(fieldmod.init_from(a.kv[0]))
         wbstore.journal("field.init", source=a.kv[0])
+        return
+    if a.action in ("suggest", "apply"):
+        from . import manual
+        if a.action == "apply":
+            return out_json(manual.apply())
+        prop = manual.suggest()
+        if a.json:
+            return out_json(prop)
+        print("建议的修改（还没写入；本人确认后执行 wb field apply）：")
+        for c in prop.get("changes") or []:
+            print(f"  · {c}")
+        print(f"\n描述：{prop.get('description')}")
+        print(f"子主题：{'、'.join(prop.get('subtopics') or [])}")
+        before = set(prop["before"].get("arxiv_keywords") or [])
+        after = prop.get("arxiv_keywords") or []
+        print("检索词：" + "，".join(x if x in before else f"+{x}" for x in after)
+              + ("；删掉：" + "，".join(sorted(before - set(after))) if before - set(after) else ""))
         return
     f = fieldmod.field()
     if a.action == "show":
@@ -307,7 +330,7 @@ def register(add):
     p.add_argument("--months", type=int, default=12)
     p.add_argument("--judge-only", action="store_true", help="不抓取，只对库里待判定的做判定和速读")
     p = add("paper", cmd_paper, "论文：ls / show / mark")
-    p.add_argument("action", choices=["ls", "show", "mark"])
+    p.add_argument("action", choices=["ls", "show", "mark", "add"])
     p.add_argument("ids", nargs="*")
     p.add_argument("--picked", action="store_true")
     p.add_argument("--day")
@@ -318,6 +341,9 @@ def register(add):
         p.add_argument(f"--{k}", action="store_true", help=h)
     p.add_argument("--undo", action="store_true")
     p.add_argument("--note")
+    p.add_argument("--seed", action="store_true", help="add：同时设为种子")
+    p.add_argument("--why", help="add：为什么提供这篇（会写进画像材料）")
+    p.add_argument("--explain", action="store_true", help="add：顺带做 8 步精读")
     p = add("seed", cmd_seed, "种子论文：ls / add / rm")
     p.add_argument("action", choices=["ls", "add", "rm"])
     p.add_argument("arxiv", nargs="?")
@@ -339,7 +365,7 @@ def register(add):
     p.add_argument("action", choices=["build", "show", "hot"])
     p.add_argument("--period", choices=["weekly", "monthly"], default="weekly")
     p.add_argument("--key")
-    p = add("field", cmd_field, "研究方向配置：init <示例> / show / set key=value")
-    p.add_argument("action", choices=["init", "show", "set"])
+    p = add("field", cmd_field, "研究方向：init <示例> / show / set k=v / suggest（据论文起草修改）/ apply（确认写入）")
+    p.add_argument("action", choices=["init", "show", "set", "suggest", "apply"])
     p.add_argument("kv", nargs="*")
 

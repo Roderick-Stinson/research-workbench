@@ -18,6 +18,7 @@ SYS_RELEVANCE = """你是研究助理，负责判断论文是否属于下面这�
 {description}
 子主题：{subtopics}
 种子论文（一定属于方向）：{seeds}
+本人标为"不相关"的论文（反例：和这些同类的判为不属于，除非核心贡献明显不同）：{negatives}
 
 判断标准：
 - 属于：论文的核心贡献是设计 / 搜索 / 生成 / 优化 / 编排 多智能体或 agentic 系统的结构（workflow、拓扑、角色、协作方式、路由），
@@ -49,6 +50,19 @@ SYS_QUICKREAD = """你是严谨的研究助理，为"{name}"方向的研究者�
 results 最多 60 条，优先：本文方法与最强 baseline 在主表上的数字、成本数字。"""
 
 
+def _negative_titles(limit: int = 30) -> str:
+    """本人标为"不相关"的论文（ADR-0033）：作为相关性判定的反例。"""
+    rows = []
+    for m in store.all_papers():
+        st = m.get("_status") or {}
+        if st.get("irrelevant"):
+            rows.append((st["irrelevant"], m.get("title") or m["id"], st.get("note")))
+    rows.sort(reverse=True)
+    if not rows:
+        return "（暂无）"
+    return "；".join(f"{t}" + (f"（原因：{n}）" if n else "") for _, t, n in rows[:limit])
+
+
 def _seed_titles() -> str:
     return "；".join(s.get("title") or s["arxiv"] for s in fieldmod.seeds())
 
@@ -57,7 +71,7 @@ def judge_relevance(metas: list, batch: int = 30, workers: int = 4, kind: str = 
     """{pid: {relevant, score, reason}}；分批并行。"""
     f = fieldmod.field()
     sys = SYS_RELEVANCE.format(name=f["name"], description=f["description"], subtopics="、".join(f["subtopics"]),
-                               seeds=_seed_titles())
+                               seeds=_seed_titles(), negatives=_negative_titles())
     chunks = [metas[i:i + batch] for i in range(0, len(metas), batch)]
 
     def one(chunk):
