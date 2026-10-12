@@ -236,6 +236,8 @@ class TestResultsTable(unittest.TestCase):
         self.assertNotEqual(results.m_key("AFlow w/o search"), results.m_key("AFlow"))
         self.assertEqual(results._clean_name("$\\mathcal{ANN}$"), "ANN")
         self.assertEqual(results._clean_name("E$^3$-Orch"), "E³-Orch")
+        self.assertEqual(results._clean_name("Plan-merge (CC \\,\\, Codex)"), "Plan-merge (CC Codex)")
+        self.assertNotEqual(results.m_key("HieraMAS (w/o LLM Selection)"), results.m_key("HieraMAS"))
         self.assertEqual(results._clean_name("DyFlow（GPT-4.1）"), "DyFlow (GPT-4.1)")
         self.assertEqual(results.bb_key("gpt-4o-mini-2024-07-18"), results.bb_key("GPT-4o-mini"))
         self.assertEqual(results.bb_key("Qwen-3-8B"), results.bb_key("Qwen3-8B"))

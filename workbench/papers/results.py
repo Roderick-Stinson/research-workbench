@@ -70,9 +70,14 @@ def base_name(raw: str | None) -> str:
     return b or (raw or "?").strip()
 
 
+def row_name(raw: str | None) -> str:
+    """表里一行的名字：配置并到基本名；消融（含括号里的 w/o …）保留全名，单独一行。"""
+    return (raw or "?").strip() if ABLATION_RX.search(raw or "") else base_name(raw)
+
+
 def m_key(raw: str | None) -> str:
     """同一方法的不同配置并成一行（消融 w/o … 仍是单独一行，默认隐藏）。"""
-    return re.sub(r"[\s\-_]+", "", base_name(raw).lower()) or "?"
+    return re.sub(r"[\s\-_]+", "", row_name(raw).lower()) or "?"
 
 
 _own = {}
@@ -104,7 +109,8 @@ def _clean_name(n: str) -> str:
     n = (n or "?").replace("（", " (").replace("）", ")")
     n = re.sub(r"\\[a-zA-Z]+\{([^{}]*)\}", r"\1", n)
     n = re.sub(r"\^\{?([0-9+\-]+)\}?", lambda m: m.group(1).translate(_SUP), n)
-    n = re.sub(r"\\[a-zA-Z]+|[${}]", "", n)
+    n = re.sub(r"\\[a-zA-Z]+|\\[,;:! ]", " ", n)
+    n = re.sub(r"[${}]", "", n)
     return re.sub(r"\s+", " ", n).replace("( ", "(").strip() or "?"
 
 
@@ -232,7 +238,7 @@ def dataset_table(rows: list, dataset: str, kind: str = "quality", full_only: bo
             rs = _pick_order(rs, c)
             v, scaled = _scaled_value(rs[0], c["pct"])
             mt = methods.setdefault(mk, {"key": mk, "names": Counter(), "cells": {}, "own": own.get(mk)})
-            mt["names"][base_name(rs[0]["method"])] += 1
+            mt["names"][row_name(rs[0]["method"])] += 1
             mt["cells"][ci] = {"value": v, "scaled": scaled, "r": rs[0],
                                "others": [dict(o, shown=_scaled_value(o, c["pct"])[0]) for o in rs[1:]]}
     out, hidden = [], 0
