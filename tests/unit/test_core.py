@@ -395,6 +395,28 @@ class TestRatings(unittest.TestCase):
         self.assertEqual(taste.new_since_profile(), 0)
         self.assertIn("按你的评价", pipeline.render_telegram(dict(iss, picks=[dict(out[0], rank=1, quality=7)])))
 
+    def test_taste_only_and_repick(self):
+        from workbench.papers import pipeline, store, taste
+        f = fieldmod.field()
+        f["taste"] = {"likes": ["提点"], "dislikes": ["只降 token 的"]}
+        fieldmod.save_field(f)
+        cands = [{"pid": "arxiv-9999.20004", "total": 0.9}, {"pid": "arxiv-9999.20003", "total": 0.5}]
+        self.assertEqual(taste.rerank(cands, 2, log=lambda *a: None)[0]["pid"], "arxiv-9999.20003")  # 没有评价也按口味重排
+        day = store.today()
+        iss = pipeline.load_issue(day)
+        iss["picks"] = [{"pid": "arxiv-9999.20004", "rank": 1, "total": 0.9}]
+        pipeline.save_issue(iss)
+        m = store.load("arxiv-9999.20004"); m["picked"] = {"day": day, "rank": 1}; store.save(m)
+        store._cache.clear()
+        from unittest import mock
+        with mock.patch.object(pipeline, "explain_picks", return_value={}):
+            res = pipeline.repick(day, reason="更关注提点", log=lambda *a: None)
+        self.assertNotIn(res["picks"][0], ("arxiv-9999.20004", "arxiv-9999.20000"))   # 口味不喜欢的不再排第一
+        self.assertEqual(res["dropped"], [] if "arxiv-9999.20004" in res["picks"] else ["arxiv-9999.20004"])
+        iss = pipeline.load_issue(day)
+        self.assertEqual(iss["replaced_picks"][-1]["reason"], "更关注提点")
+        self.assertIn("重新精选", pipeline.render_telegram(iss, update=True))
+
 
 if __name__ == "__main__":
     unittest.main()
