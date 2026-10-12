@@ -217,6 +217,9 @@ class TestResultsTable(unittest.TestCase):
         self.assertEqual(datasets.scale({"n_eval": 5000}, full)["status"], "full")
         self.assertEqual(datasets.scale({"sampled": False}, None)["status"], "full")
         self.assertEqual(datasets.scale(None, full)["status"], "unknown")
+        # 论文把 1055 题叫"完整测试集"：按官方全量 1319 判为子集
+        self.assertEqual(datasets.scale({"n_eval": 1055, "full_size": 1055, "sampled": False}, datasets.lookup("GSM8K")["full"])["status"], "subset")
+        self.assertEqual(datasets.scale({"n_eval": 500, "sampled": True}, datasets.lookup("MATH-500")["full"])["status"], "full")
 
     def test_metric_and_method_norm(self):
         from workbench.papers import results

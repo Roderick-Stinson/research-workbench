@@ -244,12 +244,16 @@ def fill(pids: list, kind: str = "daily", workers: int = 6, log=print) -> dict:
 
 
 def scale(ev: dict | None, full: dict | None) -> dict:
-    """一条结果的评测规模判定：full（全量）/ subset（抽样或子集）/ unknown（原文没写清楚）。"""
+    """一条结果的评测规模判定：full（全量）/ subset（抽样或子集）/ unknown（原文没写清楚）。
+    题数和全量都知道时按数字比（官方全量优先于论文自己写的全量：论文常把过滤 / 抽样后的集合叫 test set）；
+    没有题数时才看论文自己的说法。"""
     ev = ev or {}
-    n, fs = ev.get("n_eval"), ev.get("full_size") or (full or {}).get("n")
-    if ev.get("sampled") is True or (n and fs and n < fs):
+    n, fs = ev.get("n_eval"), (full or {}).get("n") or ev.get("full_size")
+    if n and fs:
+        st = "subset" if n < fs else "full"
+    elif ev.get("sampled") is True:
         st = "subset"
-    elif ev.get("sampled") is False or (n and fs and n >= fs):
+    elif ev.get("sampled") is False:
         st = "full"
     else:
         st = "unknown"
