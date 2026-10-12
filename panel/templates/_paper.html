@@ -40,7 +40,13 @@
     {% if x.has_explainer %}<a class="badge run" href="/paper/{{ m.id }}#explainer">精读</a>{% endif %}
     {{ flags(x.st) }}
   </div>
-  {% if x.pick and x.pick.like_reason %}<p class="small muted why">按你的评价：{{ x.pick.like_reason }}</p>{% endif %}
+  {% if x.pick and (x.pick.evidence or x.pick.like_reason) %}<p class="small why">
+    {%- set ev = x.pick.evidence or {} -%}
+    {%- if ev.std_baselines %}<span class="badge ok" title="和这些领域常用方法正面比较过">对比 {{ ev.std_baselines[:5]|join('、') }}</span> {% endif -%}
+    {%- if ev.std_benchmarks %}<span class="badge" title="常用 benchmark">{{ ev.std_benchmarks[:4]|join('、') }}</span> {% endif -%}
+    {%- if x.pick.accept %}<span class="badge {{ 'ok' if x.pick.accept >= 7 else 'warn' }}" title="按 CCF-A 主会的审稿标准估计">中稿评估 {{ '%.0f'|format(x.pick.accept) }}/10</span> {% endif -%}
+    {%- if x.pick.like_reason %}<span class="muted">{{ x.pick.like_reason }}</span>{% endif -%}
+  </p>{% endif %}
   {% if not compact %}<div class="pf">{{ facet_badges(qr, field) }}
     {% if not x.st.rating %}<button class="copy sm" data-text="评价论文 {{ m.id }}（{{ (qr.title_zh or m.title)|truncate(50) }}）： 分（1 很差 · 2 差 · 3 一般 · 4 好 · 5 很好），理由：">复制「评价」</button>{% endif %}
   </div>{% endif %}

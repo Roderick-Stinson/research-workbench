@@ -299,7 +299,7 @@ def _fake(task: str, user: str):
                           "is_proposed": n in ("Ours", "MASS")})
         return {"proposed": ["Ours"], "items": items}
     if task == "taste":
-        return {"items": [{"i": int(i), "like": 0.1 if "Recursive" in t else 0.9, "reason": "（假模型）"}
+        return {"items": [{"i": int(i), "like": 0.1 if "Recursive" in t else 0.9, "accept": 3 if "Weak" in t else 7, "reason": "（假模型）"}
                           for i, t in re.findall(r"^\[(\d+)\] (.*)$", user, re.M)]}
     if task == "field-suggest":
         return {"description": "（假模型）新的方向描述", "subtopics": ["子主题 A"], "arxiv_keywords": ["multi-agent", "agentic"],

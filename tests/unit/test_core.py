@@ -376,7 +376,7 @@ class TestRatings(unittest.TestCase):
         with self.assertRaises(SystemExit):
             taste.rate("arxiv-9999.20001", 6)
         self.assertEqual(store.load_status("arxiv-9999.20000")["rating"]["label"], "很差")
-        self.assertEqual(taste.judge([{"pid": "arxiv-9999.20003"}]), {})       # 评价少于 3 条不调用模型
+        self.assertIsNone(taste.judge([{"pid": "arxiv-9999.20003"}])["arxiv-9999.20003"]["like"])  # 没口味、评价 < 3：只做中稿评估
         taste.rate("arxiv-9999.20001", 5, "扎实")
         taste.rate("arxiv-9999.20002", 4)
         store._cache.clear()
@@ -393,7 +393,7 @@ class TestRatings(unittest.TestCase):
         manual.apply()
         self.assertEqual(fieldmod.field()["taste"]["dislikes"], ["（假模型）只有 prompt 增量"])
         self.assertEqual(taste.new_since_profile(), 0)
-        self.assertIn("按你的评价", pipeline.render_telegram(dict(iss, picks=[dict(out[0], rank=1, quality=7)])))
+        self.assertIn("中稿评估 7/10", pipeline.render_telegram(dict(iss, picks=[dict(out[0], rank=1, quality=7)])))
 
     def test_taste_only_and_repick(self):
         from workbench.papers import pipeline, store, taste
@@ -425,6 +425,53 @@ class TestRatings(unittest.TestCase):
         self.assertEqual([p["pid"] for p in iss["picks"]], before)
         self.assertEqual(iss["repick_pending"]["reason"], "再来一次")
         self.assertTrue(all((store.load(p) or {}).get("picked") for p in before))
+
+
+class TestRigor(unittest.TestCase):
+    def _rows(self):
+        from workbench.papers import results
+
+        def r(pid, method, ds, prop=False):
+            return {"pid": pid, "method": method, "mkey": results.m_key(method), "is_proposed": prop, "dataset": ds,
+                    "scale": {"status": "full"}}
+        rows = []
+        for i in range(6):  # 6 篇论文都和 AFlow、CoT、Claude Code 比
+            rows += [r(f"p{i}", "AFlow", "GSM8K"), r(f"p{i}", "CoT", "GSM8K"), r(f"p{i}", "Claude Code", "GSM8K"),
+                     r(f"p{i}", f"M{i}", "GSM8K", True)]
+        rows += [r("weak", "Ours w/o X", "MyBench"), r("weak", "Claude Code", "MyBench"), r("weak", "WeakMethod", "MyBench", True)]
+        return rows
+
+    def test_standards_and_gate(self):
+        from workbench.papers import rigor
+        rows = self._rows()
+        std = rigor.standards(rows)
+        self.assertEqual(set(std["baselines"].values()), {"AFlow"})              # CoT（通用）、Claude Code（工具）不算
+        self.assertIn("GSM8K", std["benchmarks"])
+        ev = rigor.evidence("weak", rows, std)
+        self.assertEqual(ev["std_baselines"], [])
+        self.assertEqual(ev["own_benchmarks"], ["MyBench"])
+        self.assertTrue(ev["has_ablation"])
+        method = {"facets": {"kind": ["方法"]}}
+        self.assertIsNotNone(rigor.gate({}, method, ev))                          # 方法论文没和常用方法比：不进精选
+        self.assertIsNone(rigor.gate({}, {"facets": {"kind": ["评测 / 基准"]}}, ev))
+        self.assertIsNone(rigor.gate({}, method, rigor.evidence("p0", rows, std)))
+
+    def test_min_accept(self):
+        from workbench.papers import store, taste
+        os.environ["WB_LLM_PROTOCOL"] = "fake"
+        try:
+            fieldmod.init_from("mas-arch-opt")
+            for pid, t in (("arxiv-9999.30001", "Weak harness paper"), ("arxiv-9999.30002", "Strong workflow search")):
+                store.save({"id": pid, "arxiv": pid.split("-")[1], "title": t, "abstract": "multi-agent",
+                            "intake": {"state": "relevant"}, "published": "2026-10-10", "sources": []})
+                store.save_quickread(pid, {"one_liner": t, "facets": {"kind": ["分析 / 理论"]}})
+            store._cache.clear()
+            out = taste.rerank([{"pid": "arxiv-9999.30001", "total": 0.9}, {"pid": "arxiv-9999.30002", "total": 0.5}], 2,
+                               log=lambda *a: None)
+            self.assertEqual([c["pid"] for c in out], ["arxiv-9999.30002"])     # 中稿评估 3 < 5：不进精选
+            self.assertEqual(out[0]["accept"], 7)
+        finally:
+            os.environ.pop("WB_LLM_PROTOCOL", None)
 
 
 if __name__ == "__main__":
