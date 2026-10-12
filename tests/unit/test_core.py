@@ -446,6 +446,8 @@ class TestRigor(unittest.TestCase):
         rows = self._rows()
         std = rigor.standards(rows)
         self.assertEqual(set(std["baselines"].values()), {"AFlow"})              # CoT（通用）、Claude Code（工具）不算
+        self.assertFalse(rigor._excluded("gptswarm"))                            # GPTSwarm 是方法
+        self.assertTrue(rigor._excluded("gpt4omini") and rigor._excluded("qwen38b") and rigor._excluded("o3mini"))
         self.assertIn("GSM8K", std["benchmarks"])
         ev = rigor.evidence("weak", rows, std)
         self.assertEqual(ev["std_baselines"], [])
