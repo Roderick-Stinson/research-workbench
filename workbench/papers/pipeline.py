@@ -434,6 +434,16 @@ def resume(log=print) -> dict:
     except llm.LLMPaused as e:
         return {"waiting": str(e)}
     today = _dt.date.fromisoformat(store.today())
+    # 先做排队的重新精选：它只要批量模型，不该被别的步骤（例如构思等 codex 额度）的暂停挡住
+    for day in [(today - _dt.timedelta(days=1)).isoformat(), today.isoformat()]:
+        if issue_path(day).exists() and load_issue(day).get("repick_pending"):
+            reason = load_issue(day)["repick_pending"].get("reason") or ""
+            r = repick(day, reason=reason, log=log)
+            out[f"repick {day}"] = r
+            if "paused" in r:
+                return out
+            if load_issue(day).get("pushed"):
+                push(day, force=True)  # 已推送过：推送更新；还没推送的等每天 08:30 的正常推送
     for day in [(today - _dt.timedelta(days=1)).isoformat(), today.isoformat()]:
         if not issue_path(day).exists():
             continue
@@ -455,15 +465,6 @@ def resume(log=print) -> dict:
             out[day]["pushed_update"] = True
         if any(v == "paused" for v in after.values()):
             return out  # 又暂停了：回填也别跑
-    for day in [(today - _dt.timedelta(days=1)).isoformat(), today.isoformat()]:
-        if issue_path(day).exists() and load_issue(day).get("repick_pending"):
-            reason = load_issue(day)["repick_pending"].get("reason") or ""
-            r = repick(day, reason=reason, log=log)
-            out[f"repick {day}"] = r
-            if "paused" in r:
-                return out
-            if load_issue(day).get("pushed"):
-                push(day, force=True)  # 已推送过：推送更新；还没推送的等每天 08:30 的正常推送
     if not llm.block_state():
         try:
             out["backfill"] = backfill(log=log)
