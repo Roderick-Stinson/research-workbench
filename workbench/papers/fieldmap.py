@@ -62,7 +62,8 @@ def _library_digest() -> list:
         out.append({"id": m["id"], "title": m.get("title"), "title_zh": qr.get("title_zh"),
                     "published": m.get("published"), "venue": m.get("venue"), "seed": bool(m.get("seed")),
                     "one_liner": qr.get("one_liner"), "method": (qr.get("quickread") or {}).get("method"),
-                    "limitations": (qr.get("quickread") or {}).get("limitations"), "facets": qr.get("facets")})
+                    "limitations": (qr.get("quickread") or {}).get("limitations"), "facets": qr.get("facets"),
+                    "my_rating": {k: r.get(k) for k in ("score", "note")} if (r := (m.get("_status") or {}).get("rating")) else None})
     return out
 
 

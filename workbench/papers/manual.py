@@ -5,7 +5,7 @@ wb paper add <arXiv号 | 链接 | 标题 | 服务器上的 PDF 路径>... [--see
   本人提供的论文不进每日精选（已经读过 / 知道了），但参与领域地图、结果表、构思和画像。
 
 wb field suggest / wb field apply
-  根据种子、本人提供的论文、标为不相关的论文，起草新的方向描述 / 子主题 / 检索词；本人确认后才写入。
+  根据种子、本人提供的论文、标为不相关的论文、本人的评价，起草新的方向描述 / 子主题 / 检索词 / 口味；本人确认后才写入。
 """
 from __future__ import annotations
 
@@ -131,10 +131,13 @@ def add(refs: list, seed: bool = False, why: str = "本人提供", explain: bool
 SUGGEST_SYS = """你在帮研究者维护"研究方向画像"，它决定每天抓哪些论文、怎么判断相关。根据下面的材料，提出修改建议：
 - 种子论文与本人提供的论文：说明本人关心什么（要覆盖到）；
 - 本人标为"不相关"的论文：说明本人不关心什么（描述里要能把它们排除）；
+- 本人评价过的论文（1 很差 … 5 很好，带理由）：说明本人的口味——喜欢什么样的工作、讨厌什么样的毛病；
+  口味写进 taste（likes / dislikes 各 3–8 条，具体到可以判断一篇新论文，例如"只在 prompt 层面做增量、基线不全的"）；
 - 当前画像：尽量保持稳定，只做必要的修改。
 arxiv_keywords 是 arXiv 检索词：每个词单独查 arXiv，所以要宽一点（能召回）而不是窄（相关性另有模型判断）；
 写法：单个词或短语（如 "multi-agent"），或者 "abs:xxx AND abs:yyy" / "ti:xxx" 这样的 arXiv 查询；数量 6–15 个。
-输出 JSON：{"description": "", "subtopics": [""], "arxiv_keywords": [""], "changes": ["改了什么、为什么（引用材料里的论文）"]}"""
+输出 JSON：{"description": "", "subtopics": [""], "arxiv_keywords": [""], "taste": {"likes": [""], "dislikes": [""]},
+"changes": ["改了什么、为什么（引用材料里的论文与评价）"]}"""
 
 
 def proposal_path() -> Path:
@@ -152,15 +155,17 @@ def suggest(log=print) -> dict:
 
     pos = [brief(m) for m in papers if m.get("arxiv") in seeds or m.get("manual")]
     neg = [dict(brief(m), note=(m.get("_status") or {}).get("note")) for m in papers if (m.get("_status") or {}).get("irrelevant")]
-    if not pos:
-        raise SystemExit("还没有种子或本人提供的论文：先 wb paper add / wb seed add")
-    user = json.dumps({"current": {k: f.get(k) for k in ("name", "description", "subtopics", "arxiv_keywords")},
-                       "positive_papers": pos[:60], "negative_papers": neg[:40]}, ensure_ascii=False)
+    rated = [dict(brief(m), rating=m["_status"]["rating"]["score"], reason=m["_status"]["rating"].get("note"))
+             for m in papers if (m.get("_status") or {}).get("rating")]
+    if not pos and not rated:
+        raise SystemExit("还没有种子、本人提供或评价过的论文：先 wb paper add / wb seed add / wb paper rate")
+    user = json.dumps({"current": {k: f.get(k) for k in ("name", "description", "subtopics", "arxiv_keywords", "taste")},
+                       "positive_papers": pos[:60], "negative_papers": neg[:40], "rated_papers": rated[:80]}, ensure_ascii=False)
     res = llm.chat(SUGGEST_SYS, user, task="field-suggest", max_tokens=6000)
-    prop = {"created_at": now_iso(), "based_on": {"positive": len(pos), "negative": len(neg)},
+    prop = {"created_at": now_iso(), "based_on": {"positive": len(pos), "negative": len(neg), "rated": len(rated)},
             "description": res.get("description"), "subtopics": res.get("subtopics"),
-            "arxiv_keywords": res.get("arxiv_keywords"), "changes": res.get("changes"),
-            "before": {k: f.get(k) for k in ("description", "subtopics", "arxiv_keywords")}}
+            "arxiv_keywords": res.get("arxiv_keywords"), "taste": res.get("taste"), "changes": res.get("changes"),
+            "before": {k: f.get(k) for k in ("description", "subtopics", "arxiv_keywords", "taste")}}
     write_json(proposal_path(), prop)
     return prop
 
@@ -173,7 +178,7 @@ def apply(log=print) -> dict:
     hist = config.home() / "registry" / "field.history"
     hist.mkdir(parents=True, exist_ok=True)
     write_json(hist / f"field-{now_iso().replace(':', '')}.json", f)  # 旧版本留底
-    for k in ("description", "subtopics", "arxiv_keywords"):
+    for k in ("description", "subtopics", "arxiv_keywords", "taste"):
         if prop.get(k):
             f[k] = prop[k]
     f["updated_at"] = now_iso()

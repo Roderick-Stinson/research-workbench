@@ -69,7 +69,7 @@ def register(app, render):
 
     @app.get("/papers", response_class=HTMLResponse)
     def papers_page(request: Request, q: str = "", sort: str = "curated", picked: int = 0,
-                    offset: int = 0, limit: int = 50):
+                    offset: int = 0, limit: int = 50, rated: str = ""):
         f = fieldmod.field()
         allp = [_decorate(m) for m in store.all_papers() if m.get("intake", {}).get("state") == "relevant"]
         sel = {}
@@ -85,17 +85,23 @@ def register(app, render):
                      or ql in json.dumps(x["qr"], ensure_ascii=False).lower()]
         if picked:
             items = [x for x in items if x["m"].get("picked")]
+        rf = {"any": lambda r: r is not None, "high": lambda r: r is not None and r["score"] >= 4,
+              "low": lambda r: r is not None and r["score"] <= 2, "none": lambda r: r is None}.get(rated)
+        if rf:
+            items = [x for x in items if rf((x["st"] or {}).get("rating"))]
         for k, vs in sel.items():
             items = [x for x in items if vs & {v.split(":")[0].strip() for v in (x["qr"].get("facets") or {}).get(k) or []}]
         counts = _facet_counts(items, f)
         if sort == "latest":
             items.sort(key=lambda x: x["m"].get("published") or "", reverse=True)
+        elif sort == "rated":  # 最近评价的在前
+            items.sort(key=lambda x: ((x["st"] or {}).get("rating") or {}).get("at") or "", reverse=True)
         else:  # 已整理优先：有精读 / 速读的在前，组内按发表日期
             items.sort(key=lambda x: (x["has_explainer"], bool(x["qr"]), x["m"].get("published") or ""), reverse=True)
         total = len(items)
         return render(request, "papers.html", items=items[offset:offset + limit], total=total, all_total=len(allp),
                       counts=counts, sel={k: sorted(v) for k, v in sel.items()}, q=q, sort=sort, picked=picked,
-                      offset=offset, limit=limit, field=f)
+                      offset=offset, limit=limit, field=f, rated=rated)
 
     @app.get("/paper/{pid}", response_class=HTMLResponse)
     def paper_page(request: Request, pid: str):
