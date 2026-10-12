@@ -114,6 +114,13 @@ class TestQuota(unittest.TestCase):
         self.assertEqual(p["usable"], [])
         self.assertAlmostEqual(p["next_at"] - time.time(), 300, delta=5)  # 凭据 13 先恢复
 
+    def test_pool_expired_window_counts_as_reset(self):
+        s = self._snap()
+        for c in s["credentials"]:
+            c["cooldowns"] = {}
+            c["windows"]["gemini-5h"] = {"label": "5h", "remaining": 0, "reset_at": time.time() - 60}
+        self.assertEqual(len(quota.pool(s, "gemini-x")["usable"]), 2)   # 旧快照说剩 0%，但重置时间已过
+
     def test_pool_backfill_threshold(self):
         s = self._snap()
         s["credentials"][1]["windows"]["gemini-5h"]["remaining"] = 30
@@ -425,6 +432,17 @@ class TestRatings(unittest.TestCase):
         self.assertEqual([p["pid"] for p in iss["picks"]], before)
         self.assertEqual(iss["repick_pending"]["reason"], "再来一次")
         self.assertTrue(all((store.load(p) or {}).get("picked") for p in before))
+        # 每日流程里中稿评估没做成：记下自动待补做
+        iss = pipeline.load_issue(day)
+        iss.pop("repick_pending", None)
+        iss["picks"] = []
+        for p in before:
+            m = store.load(p); m.pop("picked", None); store.save(m)
+        store._cache.clear()
+        with mock.patch.object(taste, "judge", side_effect=llm.LLMPaused("额度", time.time() + 60)):
+            pipeline.choose(day, iss, lambda *a: None)
+        self.assertTrue(iss["picks"])
+        self.assertTrue(iss["repick_pending"]["auto"])
 
 
 class TestRigor(unittest.TestCase):

@@ -195,6 +195,10 @@ def choose(day: str, iss: dict, log, strict: bool = False) -> dict:
     already = [p["pid"] for p in iss.get("picks") or []]
     room = fieldmod.cfg_selection().get("max_per_day", 10) - len(already)
     new = taste.rerank(select.pick(day, already, pool=max(80, 6 * room)), room, log=log, strict=strict) if room > 0 else []
+    if new and not strict and not any("accept" in c for c in new):
+        iss["repick_pending"] = {"at": now_iso(), "auto": True,
+                                 "reason": "选的时候批量模型额度不够，只过了硬门槛、没做中稿评估；额度恢复后自动按完整规则重选"}
+        log("中稿评估没做成：记下待补做，额度恢复后自动重选")
     for i, c in enumerate(new, start=len(already) + 1):
         c["rank"] = i
         c["picked_at"] = now_iso()
@@ -327,7 +331,7 @@ def render_telegram(iss: dict, update: bool = False) -> str:
         rp = (iss.get("replaced_picks") or [])[-1:] if update else []
         lines.append(f"今日精选 {len(picks)} 篇（{'过了硬门槛与中稿评估，' if any(p.get('accept') for p in picks) else '按质量，'}"
                      f"{'按你的口味排，' if any(p.get('like') is not None for p in picks) else ''}最多 10 篇）"
-                     + (f"\n已按你的要求重新精选{('：' + e(rp[0]['reason'])) if rp[0].get('reason') else ''}" if rp else ""))
+                     + (f"\n已重新精选{('：' + e(rp[0]['reason'])) if rp[0].get('reason') else ''}" if rp else ""))
         for p in picks:
             m = store.load(p["pid"]) or {}
             qr = store.load_quickread(p["pid"]) or {}
@@ -458,7 +462,8 @@ def resume(log=print) -> dict:
             out[f"repick {day}"] = r
             if "paused" in r:
                 return out
-            push(day, force=True)
+            if load_issue(day).get("pushed"):
+                push(day, force=True)  # 已推送过：推送更新；还没推送的等每天 08:30 的正常推送
     if not llm.block_state():
         try:
             out["backfill"] = backfill(log=log)
