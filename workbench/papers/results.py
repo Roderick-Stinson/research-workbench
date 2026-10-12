@@ -96,8 +96,16 @@ def index_path():
     return config.home() / "reports" / "results_index.json"
 
 
+_SUP = str.maketrans("0123456789+-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻")
+
+
 def _clean_name(n: str) -> str:
-    return re.sub(r"\s+", " ", (n or "?").replace("（", " (").replace("）", ")")).replace("( ", "(").strip()
+    """显示用：全角括号、LaTeX（$\\mathcal{ANN}$ → ANN，E$^3$ → E³）、多余空白。"""
+    n = (n or "?").replace("（", " (").replace("）", ")")
+    n = re.sub(r"\\[a-zA-Z]+\{([^{}]*)\}", r"\1", n)
+    n = re.sub(r"\^\{?([0-9+\-]+)\}?", lambda m: m.group(1).translate(_SUP), n)
+    n = re.sub(r"\\[a-zA-Z]+|[${}]", "", n)
+    return re.sub(r"\s+", " ", n).replace("( ", "(").strip() or "?"
 
 
 def build_rows() -> list:
@@ -121,6 +129,8 @@ def build_rows() -> list:
             if nstat == "missing":
                 continue  # 核对后原文里找不到这个方法：抽错了，不进表
             name = _clean_name(name)
+            if nstat == "renamed" and name == _clean_name(raw):
+                nstat = "ok"
             ev = evs.get(datasets.key(r.get("task"))) or evs.get(datasets.key(ds["name"]))
             metric, mkind, hib = canon_metric(r.get("metric"), r.get("unit"), ds["category"])
             if metric in PCT_METRICS and not 0 <= r["value"] <= 100:
