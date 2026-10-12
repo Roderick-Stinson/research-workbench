@@ -13,7 +13,7 @@ description: 实验工作台的论文侧：用户说"这篇读过了 / 收藏 / 
 ```bash
 wb paper mark <论文> --read            # 读过了
 wb paper mark <论文> --fav             # 收藏
-wb paper mark <论文> --irrelevant      # 不相关（作为负样本，以后少推这类）
+wb paper mark <论文> --irrelevant      # 不相关（这篇不再进精选；目前还不作为负样本影响相关性判定）
 wb paper mark <论文> --reproduce       # 想复现（再按下面的复现流程走）
 wb paper mark <论文> --read --undo     # 撤销
 wb paper show <论文> [--json]          # 看速读、抽取的结果、质量评估
