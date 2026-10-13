@@ -220,6 +220,14 @@ def repos(day: str, iss: dict, log) -> dict:
     metas = [{"id": c["url"], "title": c["name"], "abstract": c["description"]} for c in cands[:40]]
     res = intake.judge_relevance(metas)
     keep = [c for c in cands[:40] if (res.get(c["url"]) or {}).get("relevant")]
+    from . import taste
+
+    for c in keep:
+        c["key"], c["kind"], c["title"], c["text"] = c["url"], "代码仓库", c["name"], c.get("description") or ""
+    keep = taste.keep(keep, log=log, label="新仓库")
+    for c in keep:
+        for k in ("key", "kind", "title", "text"):
+            c.pop(k, None)
     iss["repos"] = keep[:10]
     log(f"新仓库 {len(cands)} 个，属于方向 {len(keep)} 个")
     return {"repos": len(keep)}
@@ -309,6 +317,17 @@ def hf_section(day: str, iss: dict, log) -> dict:
         cands.append({"pid": m["id"], "upvotes": (m.get("attention") or {}).get("hf_upvotes") or 0, "hf_day": max(refs),
                       "evidence": ev})
     cands.sort(key=lambda c: -c["upvotes"])
+    from . import taste
+
+    for c in cands:
+        qr = store.load_quickread(c["pid"]) or {}
+        m = store.load(c["pid"]) or {}
+        c["key"], c["kind"], c["title"] = c["pid"], "论文", m.get("title")
+        c["text"] = f"{qr.get('one_liner') or ''}；{rigor.text(c['evidence'])}"
+    cands = taste.keep(cands, log=log, label="HF 栏")
+    for c in cands:
+        for k in ("key", "kind", "title", "text"):
+            c.pop(k, None)
     iss["hf"] = cands[:n_max]
     for c in iss["hf"]:
         m = store.load(c["pid"])
@@ -391,6 +410,8 @@ def render_telegram(iss: dict, update: bool = False) -> str:
             link = f"{url}/paper/{h['pid']}" if url else m.get("url")
             ev = h.get("evidence") or {}
             cmp_ = f"对比：{'、'.join(ev['std_baselines'][:4])}" if ev.get("std_baselines") else "没和领域常用方法比较"
+            if h.get("like_reason"):
+                cmp_ += f"；{h['like_reason']}"
             lines.append(f"• <a href=\"{e(link)}\">{e(qr.get('title_zh') or m.get('title'))}</a>（👍 {h['upvotes']}）\n"
                          f"{e(qr.get('one_liner') or '')}\n<i>{e(cmp_)}</i>")
     news = [p for p in iss.get("new") or [] if p not in {x["pid"] for x in picks}]

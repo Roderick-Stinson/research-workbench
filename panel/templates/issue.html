@@ -30,7 +30,8 @@
   {%- set ev = x.hf.evidence or {} -%}
   <p class="small hfnote">👍 {{ x.hf.upvotes }} · HF Daily {{ x.hf.hf_day }} ·
   {% if ev.std_baselines %}<span class="badge ok">对比 {{ ev.std_baselines[:4]|join('、') }}</span>{% else %}<span class="badge warn">没和领域常用方法比较</span>{% endif %}
-  {% if ev.std_benchmarks %}<span class="badge">{{ ev.std_benchmarks[:4]|join('、') }}</span>{% endif %}</p>
+  {% if ev.std_benchmarks %}<span class="badge">{{ ev.std_benchmarks[:4]|join('、') }}</span>{% endif %}
+  {% if x.hf.like_reason %}<span>{{ x.hf.like_reason }}</span>{% endif %}</p>
 {% endfor %}</div>
 {% endif %}
 

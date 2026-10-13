@@ -150,6 +150,8 @@ def rerank(cands: list, room: int, log=print, strict: bool = False) -> list:
         c["accept"], c["like"], c["like_reason"] = j["accept"], j["like"], j["reason"]
         if j["accept"] < min_acc:
             continue
+        if j["like"] is not None and j["like"] < min_like():
+            continue  # 口味过滤（ADR-0039）
         if j["like"] is None:
             c["total"] = round(0.4 * c["total"] + 0.6 * j["accept"] / 10, 4)
         else:
@@ -158,6 +160,63 @@ def rerank(cands: list, room: int, log=print, strict: bool = False) -> list:
     out.sort(key=lambda c: -c["total"])
     log(f"中稿评估 + 口味：评估 {len(js)} 篇，{len(out)} 篇达到门槛（中稿评估 ≥ {min_acc}），取 {min(room, len(out))} 篇")
     return out[:room]
+
+
+SYS_SCREEN = """你在帮一位研究者过滤推给他的东西（论文、代码仓库、研究想法）。依据他的口味（画像里写的喜欢 / 不喜欢）
+和他评价过的论文与理由，判断每一项他会不会喜欢：like 0 到 1；口味里明确说不喜欢的那类（看主要贡献是什么）给低分。
+只判断合不合他的口味，不判断是否属于研究方向（都已属于方向）。每项给一句中文理由。
+输出 JSON：{"items": [{"i": 序号, "like": 0.0-1.0, "reason": "一句话"}]}，每项都要有。"""
+
+
+def has_taste() -> bool:
+    t = fieldmod.field().get("taste") or {}
+    return bool(t.get("likes") or t.get("dislikes")) or len(rated()) >= 3
+
+
+def screen(items: list, log=print) -> dict:
+    """口味过滤（ADR-0039）：items = [{key, kind: 论文 / 代码仓库 / 研究想法, title, text}] → {key: {like, reason}}。
+    没有口味、模型不可用时返回 {}（调用方照常展示，不过滤）。"""
+    if not items or not has_taste():
+        return {}
+    taste = fieldmod.field().get("taste") or {}
+    ex = "\n".join(f"- [{x['score']} 分 {LABELS[x['score']]}] {_brief(x)}" + (f"\n  理由：{x['note']}" if x.get("note") else "")
+                   for x in rated()[:40]) or "（还没有）"
+    lines = "\n".join(f"[{i}]（{it.get('kind', '论文')}）{it.get('title')}\n  {(it.get('text') or '')[:400]}" for i, it in enumerate(items))
+    user = (f"口味：喜欢 {taste.get('likes') or '（未写）'}；不喜欢 {taste.get('dislikes') or '（未写）'}\n\n"
+            f"他评价过的论文：\n{ex}\n\n要过滤的：\n{lines}")
+    try:
+        res = llm.chat(SYS_SCREEN, user, task="taste-screen", max_tokens=6000)
+    except Exception as e:  # noqa: BLE001  过滤失败就不过滤，不让推送空着
+        log(f"口味过滤跳过：{e}")
+        return {}
+    out = {}
+    for it in res.get("items") or []:
+        try:
+            out[items[int(it["i"])]["key"]] = {"like": max(0.0, min(1.0, float(it.get("like")))), "reason": it.get("reason")}
+        except (KeyError, ValueError, IndexError, TypeError):
+            continue
+    return out
+
+
+def min_like() -> float:
+    return fieldmod.cfg_selection().get("min_like", 0.4)
+
+
+def keep(items: list, key=lambda x: x["key"], log=print, label: str = "") -> list:
+    """过滤并把 like / like_reason 写回每一项；返回留下的。"""
+    sc = screen(items, log=log)
+    if not sc:
+        return items
+    out = []
+    for it in items:
+        s = sc.get(key(it))
+        if s:
+            it["like"], it["like_reason"] = s["like"], s["reason"]
+            if s["like"] < min_like():
+                continue
+        out.append(it)
+    log(f"口味过滤{('（' + label + '）') if label else ''}：{len(items)} 项去掉 {len(items) - len(out)} 项")
+    return out
 
 
 def new_since_profile() -> int:

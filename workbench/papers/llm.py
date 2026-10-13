@@ -301,6 +301,9 @@ def _fake(task: str, user: str):
     if task == "taste":
         return {"items": [{"i": int(i), "like": 0.1 if "Recursive" in t else 0.9, "accept": 3 if "Weak" in t else 7, "reason": "（假模型）"}
                           for i, t in re.findall(r"^\[(\d+)\] (.*)$", user, re.M)]}
+    if task == "taste-screen":
+        return {"items": [{"i": int(i), "like": 0.1 if "token" in t.lower() else 0.9, "reason": "（假模型）"}
+                          for i, t in re.findall(r"^\[(\d+)\]（.*?）(.*)$", user, re.M)]}
     if task == "field-suggest":
         return {"description": "（假模型）新的方向描述", "subtopics": ["子主题 A"], "arxiv_keywords": ["multi-agent", "agentic"],
                 "taste": {"likes": ["（假模型）实验扎实"], "dislikes": ["（假模型）只有 prompt 增量"]},
