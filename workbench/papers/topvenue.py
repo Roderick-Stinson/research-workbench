@@ -3,8 +3,9 @@
 1. 发现：论文库只回填了近 12 个月的 arXiv，领域的经典工作（2023–2025 的顶会论文）大多不在库里。
    用 Semantic Scholar 按关键词 × 顶会顶刊（2023 年起）检索，新论文进库（标 backfill，不进每日精选），走相关性判定与速读。
 2. 录用信息：库里属于方向的论文，用 S2（venue / publicationVenue / journal）、arXiv 评论、速读里作者自称的会议识别顶会顶刊（venues.py）。
-3. 必读 = 属于方向 + 顶会顶刊 + 至少一条：种子论文 / 领域常用方法的原论文 / 被论文库里 ≥ 3 篇论文当作对比方法 / 引用数高
-   （发表满一年 ≥ 50，不满一年 ≥ 20）。其余顶会顶刊论文是"值得读"，过口味过滤（ADR-0039）。按发表时间排序。
+3. 必读 = 属于方向 + 顶会顶刊 + 至少一条：种子论文 / 领域常用方法的原论文 / 被论文库里 ≥ 3 篇论文当作对比方法 /
+   引用数高（发表满一年 ≥ 100，不满一年 ≥ 40，且要过口味过滤）。其余顶会顶刊论文是"值得读"，过口味过滤（ADR-0039）。
+   按首次公开时间排序；会议年份只用录用信息里写明的（不拿 arXiv 年份代替）。
 """
 from __future__ import annotations
 
@@ -95,7 +96,7 @@ def discover(log=print, max_per_query: int = 1000) -> dict:
                "pdf_url": f"https://arxiv.org/pdf/{aid}" if aid else None}
         pid, is_new = store.upsert(index, rec, {"name": "top-venue", "ref": v["name"]})
         m = store.load(pid)
-        m["top_venue"] = dict(v, year=v.get("year") or p.get("year"), date=_date(p), checked_at=now_iso())
+        m["top_venue"] = dict(v, date=_date(p), checked_at=now_iso())
         m["citations"] = p.get("citationCount")
         if is_new:
             m["backfill"] = True  # 不进每日精选
@@ -168,7 +169,7 @@ def refresh_venues(log=print, max_age_days: int = 14) -> dict:
         if p.get("citationCount") is not None:
             m["citations"] = p["citationCount"]
         if v:
-            m["top_venue"] = dict(v, year=v.get("year") or p.get("year"), date=_date(p) or m.get("published") or "",
+            m["top_venue"] = dict(v, date=_date(p) or m.get("published") or "",
                                   checked_at=now_iso())
             n_top += 1
         else:
@@ -223,12 +224,26 @@ def build(log=print) -> dict:
             why.append(f"领域常用方法 {'、'.join(sorted(std['baselines'][k] for k in mks & set(std['baselines'])))} 的原论文")
         if n_cmp >= 3:
             why.append(f"被论文库里 {n_cmp} 篇论文当作对比方法")
-        if cites >= (50 if age >= 365 else 20):
+        cite_only = False
+        if cites >= (100 if age >= 365 else 40):
+            cite_only = not why
             why.append(f"引用 {cites}")
         item = {"pid": m["id"], "title": m.get("title"), "title_zh": qr.get("title_zh"), "one_liner": qr.get("one_liner"),
                 "venue": v, "date": date, "citations": cites, "compared_by": n_cmp, "why": why,
-                "methods": sorted(mks), "has_explainer": (store.pdir(m["id"]) / "explainer.html").exists()}
+                "methods": sorted(mks), "has_explainer": (store.pdir(m["id"]) / "explainer.html").exists(), "cite_only": cite_only}
         (must if why else worth).append(item)
+    # 只靠引用数进必读的，也要合口味（高引用的应用类论文不算必读）
+    co = [x for x in must if x["cite_only"]]
+    for it in co:
+        it["key"], it["kind"], it["text"] = it["pid"], "论文", it.get("one_liner") or ""
+    kept = {x["pid"] for x in taste.keep(co, log=log, label="高引用必读")} if co else set()
+    for it in co:
+        for k in ("key", "kind", "text"):
+            it.pop(k, None)
+        if it["pid"] not in kept:
+            must.remove(it)
+            it["why"] = []
+            worth.append(it)
     for it in worth:
         it["key"], it["kind"], it["text"] = it["pid"], "论文", it.get("one_liner") or ""
     worth = taste.keep(worth, log=log, label="顶会值得读") if worth else worth

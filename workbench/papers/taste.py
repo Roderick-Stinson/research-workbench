@@ -173,11 +173,19 @@ def has_taste() -> bool:
     return bool(t.get("likes") or t.get("dislikes")) or len(rated()) >= 3
 
 
-def screen(items: list, log=print) -> dict:
+def screen(items: list, log=print, batch: int = 40) -> dict:
     """口味过滤（ADR-0039）：items = [{key, kind: 论文 / 代码仓库 / 研究想法, title, text}] → {key: {like, reason}}。
-    没有口味、模型不可用时返回 {}（调用方照常展示，不过滤）。"""
+    每次调用最多 batch 项（太多会让网关超时）。没有口味、模型不可用时返回 {}（调用方照常展示，不过滤）。"""
     if not items or not has_taste():
         return {}
+    if len(items) > batch:
+        out = {}
+        for i in range(0, len(items), batch):
+            part = screen(items[i:i + batch], log=log, batch=batch)
+            if not part:
+                return {}  # 有一批失败：整体不过滤，避免一半过滤一半没过滤
+            out.update(part)
+        return out
     taste = fieldmod.field().get("taste") or {}
     ex = "\n".join(f"- [{x['score']} 分 {LABELS[x['score']]}] {_brief(x)}" + (f"\n  理由：{x['note']}" if x.get("note") else "")
                    for x in rated()[:40]) or "（还没有）"
