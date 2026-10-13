@@ -54,7 +54,14 @@ def register(app, render):
                 x = _decorate(m)
                 x["pick"] = p
                 picks.append(x)
-        pick_ids = {p["pid"] for p in iss.get("picks") or []}
+        hf = []
+        for h in iss.get("hf") or []:
+            m = store.load(h["pid"])
+            if m:
+                x = _decorate(m)
+                x["hf"] = h
+                hf.append(x)
+        pick_ids = {p["pid"] for p in iss.get("picks") or []} | {h["pid"] for h in iss.get("hf") or []}
         new = [_decorate(m) for m in (store.load(pid) for pid in iss.get("new") or []) if m and m["id"] not in pick_ids]
         new.sort(key=lambda x: -((x["score"] or {}).get("total") or 0))
         d = config.home() / "reports" / "daily"
@@ -64,7 +71,7 @@ def register(app, render):
             m = store.load(g["pid"])
             if m:
                 progress.append({"g": g, "m": m, "qr": store.load_quickread(g["pid"]) or {}})
-        return render(request, "issue.html", iss=iss, picks=picks, new=new, days=days, progress=progress,
+        return render(request, "issue.html", iss=iss, picks=picks, hf=hf, new=new, days=days, progress=progress,
                       field=fieldmod.field())
 
     @app.get("/papers", response_class=HTMLResponse)

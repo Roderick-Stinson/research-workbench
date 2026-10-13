@@ -282,6 +282,41 @@ def periodic_reports(day: str, iss: dict, log) -> dict:
     return out
 
 
+def hf_section(day: str, iss: dict, log) -> dict:
+    """HF Daily 单独一栏（ADR-0038）：近 N 天上过 HF Daily、属于研究方向的论文，按点赞取前几篇。
+    不放宽方向（仍要相关性判定为属于方向）；不算精选、不过 baseline 门槛与中稿评估、不做精读；已经出现过的不再重复。"""
+    from . import results, rigor
+
+    sel = fieldmod.cfg_selection()
+    n_max, win = sel.get("hf_max_per_day", 5), sel.get("hf_window_days", 7)
+    since = (_dt.date.fromisoformat(day) - _dt.timedelta(days=win)).isoformat()
+    picked = {p["pid"] for p in iss.get("picks") or []}
+    rows = results.all_rows()
+    std = rigor.standards(rows)
+    cands = []
+    for m in store.all_papers():
+        refs = [s.get("ref") or "" for s in m.get("sources") or [] if s.get("name") == "hf"]
+        if not refs or max(refs) < since or max(refs) > day:
+            continue
+        if m.get("intake", {}).get("state") != "relevant" or m["id"] in picked or m.get("picked"):
+            continue
+        if m.get("hf_shown") and m["hf_shown"] != day:
+            continue  # 之前某期已经出现过
+        if (m.get("_status") or {}).get("irrelevant"):
+            continue
+        ev = rigor.evidence(m["id"], rows, std)
+        cands.append({"pid": m["id"], "upvotes": (m.get("attention") or {}).get("hf_upvotes") or 0, "hf_day": max(refs),
+                      "evidence": ev})
+    cands.sort(key=lambda c: -c["upvotes"])
+    iss["hf"] = cands[:n_max]
+    for c in iss["hf"]:
+        m = store.load(c["pid"])
+        m["hf_shown"] = day
+        store.save(m)
+    log(f"HF Daily 栏：近 {win} 天属于方向的 {len(cands)} 篇，取 {len(iss['hf'])} 篇")
+    return {"hf": len(iss["hf"]), "candidates": len(cands)}
+
+
 def profile_suggest(day: str, iss: dict, log) -> dict:
     """新评价攒够 3 条且没有待确认的建议时，起草画像修改（ADR-0036）；本人确认后才写入。"""
     from . import manual, taste
@@ -298,7 +333,7 @@ def profile_suggest(day: str, iss: dict, log) -> dict:
 
 
 STEPS = [("harvest", harvest), ("judge", judge), ("read", read), ("results", results_table), ("attention", attention), ("choose", choose),
-         ("repos", repos), ("explain", explain_picks), ("map", field_map), ("ideate", ideation),
+         ("repos", repos), ("hf", hf_section), ("explain", explain_picks), ("map", field_map), ("ideate", ideation),
          ("reports", periodic_reports), ("profile", profile_suggest)]
 
 
@@ -319,7 +354,7 @@ def run(day: str | None = None, only: list | None = None) -> dict:
 
 
 STEP_NAMES = {"harvest": "抓取", "judge": "相关性判定", "read": "速读", "results": "结果表", "attention": "关注度", "choose": "精选",
-              "repos": "新仓库", "explain": "精读", "map": "领域地图", "ideate": "构思", "reports": "报告", "profile": "画像"}
+              "repos": "新仓库", "hf": "HF Daily 栏", "explain": "精读", "map": "领域地图", "ideate": "构思", "reports": "报告", "profile": "画像"}
 
 
 def render_telegram(iss: dict, update: bool = False) -> str:
@@ -347,6 +382,16 @@ def render_telegram(iss: dict, update: bool = False) -> str:
                          f"{e(qr.get('one_liner') or '')}\n<i>{e(meta)}</i>{why}")
     else:
         lines.append("今天没有达到质量门槛的新论文。")
+    if iss.get("hf"):
+        lines.append(f"<b>🤗 HF Daily · 你的方向</b>（{len(iss['hf'])} 篇，按点赞；不算精选、没过 baseline 门槛）")
+        for h in iss["hf"]:
+            m = store.load(h["pid"]) or {}
+            qr = store.load_quickread(h["pid"]) or {}
+            link = f"{url}/paper/{h['pid']}" if url else m.get("url")
+            ev = h.get("evidence") or {}
+            cmp_ = f"对比：{'、'.join(ev['std_baselines'][:4])}" if ev.get("std_baselines") else "没和领域常用方法比较"
+            lines.append(f"• <a href=\"{e(link)}\">{e(qr.get('title_zh') or m.get('title'))}</a>（👍 {h['upvotes']}）\n"
+                         f"{e(qr.get('one_liner') or '')}\n<i>{e(cmp_)}</i>")
     news = [p for p in iss.get("new") or [] if p not in {x["pid"] for x in picks}]
     if news:
         lines.append(f"另有 {len(news)} 篇新收录（已速读）：{url}/issue/{iss['day']}")

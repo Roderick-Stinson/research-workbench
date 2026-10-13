@@ -494,5 +494,29 @@ class TestRigor(unittest.TestCase):
             os.environ.pop("WB_LLM_PROTOCOL", None)
 
 
+class TestHFSection(unittest.TestCase):
+    def test_hf_section(self):
+        from workbench.papers import pipeline, store
+        fieldmod.init_from("mas-arch-opt")
+        day = "2026-10-13"
+        specs = [("arxiv-9999.40001", "relevant", 50, "2026-10-12"), ("arxiv-9999.40002", "relevant", 90, "2026-10-11"),
+                 ("arxiv-9999.40003", "irrelevant", 300, "2026-10-12"),   # 不属于方向：不放宽
+                 ("arxiv-9999.40004", "relevant", 70, "2026-09-01"),      # 太旧
+                 ("arxiv-9999.40005", "relevant", 10, "2026-10-12")]
+        for pid, state, up, ref in specs:
+            store.save({"id": pid, "arxiv": pid.split("-")[1], "title": pid, "intake": {"state": state}, "published": ref,
+                        "sources": [{"name": "hf", "ref": ref}], "attention": {"hf_upvotes": up}})
+        m = store.load("arxiv-9999.40005"); m["picked"] = {"day": day}; store.save(m)   # 已进精选：不重复
+        store._cache.clear()
+        iss = {"day": day, "steps": {}, "picks": []}
+        pipeline.hf_section(day, iss, lambda *a: None)
+        self.assertEqual([h["pid"] for h in iss["hf"]], ["arxiv-9999.40002", "arxiv-9999.40001"])   # 按点赞
+        self.assertIn("HF Daily · 你的方向", pipeline.render_telegram(iss))
+        store._cache.clear()
+        iss2 = {"day": "2026-10-14", "steps": {}, "picks": []}
+        pipeline.hf_section("2026-10-14", iss2, lambda *a: None)
+        self.assertEqual(iss2["hf"], [])                                                          # 出现过的不再重复
+
+
 if __name__ == "__main__":
     unittest.main()
