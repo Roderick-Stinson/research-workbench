@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}顶会顶刊必读 · 实验工作台{% endblock %}
+{% macro url(t=None, o=None, tr=None) -%}/must-read?tab={{ t or tab }}&order={{ o or order }}{% if (tr if tr is not none else tier) %}&tier={{ (tr if tr is not none else tier)|urlencode }}{% endif %}{%- endmacro %}
+{% block body %}
+<h1>顶会顶刊必读</h1>
+<p class="sub">你的方向里发表在 CCF-A 会议 / 期刊（含 TPAMI）、ICLR（CCF 未列，公认顶会）、Nature / Science 子刊上的论文（2023 年起；研讨会、Findings 不算）。
+<b>必读</b> = 至少满足一条：你的种子论文、领域常用方法的原论文、被论文库里 ≥ 3 篇论文当作对比方法、引用数高；其余是<b>值得读</b>（过了口味过滤）。
+{% if d.built_at %}更新于 {{ fmt_time(d.built_at) }}，每周一重新检索。{% endif %}</p>
+
+<div class="tabs" style="margin-top:6px">
+  <a class="{{ 'on' if tab == 'must' }}" href="{{ url(t='must') }}">必读 <span class="muted small">{{ (d.must or [])|length }}</span></a>
+  <a class="{{ 'on' if tab == 'worth' }}" href="{{ url(t='worth') }}">值得读 <span class="muted small">{{ (d.worth or [])|length }}</span></a>
+</div>
+<div class="pf rsel">
+  <a class="badge {{ 'run' if order != 'old' }}" href="{{ url(o='new') }}">新 → 旧</a>
+  <a class="badge {{ 'run' if order == 'old' }}" href="{{ url(o='old') }}">旧 → 新</a>
+  <span class="muted">·</span>
+  <a class="badge {{ 'run' if not tier }}" href="{{ url(tr='') }}">全部</a>
+  {% for t in tiers %}<a class="badge {{ 'run' if tier == t }}" href="{{ url(tr=t) }}">{{ t }}</a>{% endfor %}
+</div>
+
+{% if items %}
+<div class="box"><table class="mr">
+<thead><tr><th>时间</th><th>会议 / 期刊</th><th>论文</th><th>为什么{{ '必读' if tab == 'must' else '值得读' }}</th><th>代码</th></tr></thead>
+<tbody>
+{% for x in items %}{% set c = codes[x.pid] %}{% set st = sts[x.pid] %}
+<tr>
+  <td class="mono small nowrap">{{ (x.date or '')[:7] }}</td>
+  <td class="nowrap"><span class="badge {{ 'v' if 'CCF-A' in x.venue.tier else ('ok' if 'ICLR' in x.venue.tier else 'warn') }}" title="{{ x.venue.tier }}{% if x.venue.raw %}（{{ x.venue.raw }}）{% endif %}">{{ x.venue.name }}{% if x.venue.year %} {{ x.venue.year }}{% endif %}</span></td>
+  <td><a href="/paper/{{ x.pid }}">{{ x.title_zh or x.title }}</a>{% if x.title_zh %}<div class="small muted">{{ x.title }}</div>{% endif %}
+    {% if x.one_liner %}<div class="small">{{ x.one_liner }}</div>{% endif %}
+    {% if st.rating %}<span class="badge">我的评价 {{ '★' * st.rating.score }}</span>{% endif %}
+    {% if x.has_explainer %}<a class="badge run" href="/paper/{{ x.pid }}#explainer">精读</a>{% endif %}</td>
+  <td class="small">{% for w in x.why %}<div>· {{ w }}</div>{% endfor %}{% if x.like_reason %}<div class="muted">{{ x.like_reason }}</div>{% endif %}</td>
+  <td class="nowrap">{% if c.status == 'open' %}<a class="badge ok" href="{{ c.url }}" target="_blank">已开源{% if c.stars %} ★{{ c.stars }}{% endif %}</a>{% elif c.status %}<span class="badge {{ 'bad' if c.status == 'dead' else 'muted' }}">{{ code_names[c.status] }}</span>{% else %}<span class="muted">?</span>{% endif %}</td>
+</tr>{% endfor %}
+</tbody></table></div>
+{% else %}<div class="empty"><p>{{ '还没有生成清单。每天的流程会生成；也可以让 agent 运行 wb topvenue run。' if not d.built_at else '这一栏是空的。' }}</p></div>{% endif %}
+{% endblock %}

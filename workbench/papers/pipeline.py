@@ -280,8 +280,14 @@ def ideation(day: str, iss: dict, log) -> dict:
 def periodic_reports(day: str, iss: dict, log) -> dict:
     from . import reports
 
+    from . import topvenue
+
     out = {"hot": len(reports.hot(day)["items"])}
     d = _dt.date.fromisoformat(day)
+    try:
+        out["must_read"] = topvenue.run(log=log, discover_too=d.weekday() == 0)["list"]  # 每周一重新检索顶会顶刊
+    except Exception as e:  # noqa: BLE001  必读清单失败不影响报告
+        log(f"顶会顶刊必读没更新：{e}")
     if d.weekday() == 0:
         out["weekly"] = reports.build("weekly")["key"]
     if d.day == 1:

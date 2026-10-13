@@ -176,6 +176,8 @@ a.badge:hover { text-decoration: none; border-color: var(--accent); }
 a.copy { display: inline-block; text-decoration: none; }
 button.copy.sm { font-size: 11px; padding: 1px 7px; }
 .pcard .why { margin: 6px 0 0; }
+table.mr td { vertical-align: top; }
+.nowrap { white-space: nowrap; }
 .hfnote { margin: -4px 0 4px 16px; color: var(--muted); }
 .myrate { padding: 12px 16px; margin: 14px 0 6px; }
 .myrate .rh { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

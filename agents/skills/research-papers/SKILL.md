@@ -52,6 +52,13 @@ wb field set 'selection.standard_baselines=["AFlow", "ADAS", "MaAS", ...]'   # �
 wb field set selection.min_accept=6                                        # 中稿评估门槛（1–10，默认 5）
 ```
 
+## 顶会顶刊必读（"我该读哪些顶会论文"）
+```bash
+wb topvenue ls [--worth] [--json]   # 必读（默认）/ 值得读，按时间排序，带"为什么必读"
+wb topvenue run [--no-discover]     # 重新检索 + 判定 / 速读 + 录用信息 + 清单（每周一自动）
+```
+面板"必读"页可以按会议档次筛选、切换时间顺序。
+
 ## 更新研究画像（"根据这些论文更新我的方向"）
 ```bash
 wb field suggest     # 根据种子、本人提供的论文、标为不相关的论文、本人的评价，起草新的描述 / 子主题 / 检索词 / 口味（不写入）

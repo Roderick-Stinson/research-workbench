@@ -364,6 +364,23 @@ def cmd_results(a):
     return None
 
 
+def cmd_topvenue(a):
+    """wb topvenue run | ls [--worth]：顶会顶刊必读（ADR-0040）。"""
+    from . import topvenue
+
+    if a.action == "run":
+        return out_json(topvenue.run(discover_too=not a.no_discover))
+    d = topvenue.load()
+    items = d.get("worth" if a.worth else "must") or []
+    if a.json:
+        return out_json(items)
+    for x in items:
+        print(f"{(x.get('date') or '')[:7]}  {x['venue']['name']} {x['venue'].get('year') or ''}  {(x.get('title_zh') or x['title'])[:60]}  {x['pid']}")
+        for w in x.get("why") or []:
+            print(f"        · {w}")
+    return None
+
+
 def cmd_report(a):
     from . import reports
 
@@ -420,6 +437,10 @@ def register(add):
     p = add("results", cmd_results, "跨论文结果表：不给参数列数据集；<数据集> 看报告；refresh 归类 + 补评测规模 / 方法名核对 + 核实代码 + 重建索引")
     p.add_argument("task", nargs="*")
     p.add_argument("--limit", type=int, default=0)
+    p = add("topvenue", cmd_topvenue, "顶会顶刊必读：run（检索 + 判定 + 录用信息 + 清单）/ ls [--worth]")
+    p.add_argument("action", choices=["run", "ls"])
+    p.add_argument("--worth", action="store_true", help="ls：看值得读（默认看必读）")
+    p.add_argument("--no-discover", action="store_true", help="run：不重新检索，只更新录用信息和清单")
     p = add("report", cmd_report, "周报 / 月报 / 热点：build / show / hot")
     p.add_argument("action", choices=["build", "show", "hot"])
     p.add_argument("--period", choices=["weekly", "monthly"], default="weekly")

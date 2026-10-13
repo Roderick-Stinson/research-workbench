@@ -545,5 +545,36 @@ class TestTasteScreen(unittest.TestCase):
             os.environ.pop("WB_LLM_PROTOCOL", None)
 
 
+class TestTopVenue(unittest.TestCase):
+    def test_classify(self):
+        from workbench.papers import venues
+        self.assertEqual(venues.classify("Accepted at ICLR 2025 (Oral)")["key"], "ICLR")
+        self.assertEqual(venues.classify("IEEE Transactions on Pattern Analysis and Machine Intelligence")["key"], "TPAMI")
+        self.assertEqual(venues.classify("Nature Machine Intelligence")["tier"], "Nature 子刊")
+        for s_ in ("NeurIPS 2025 Workshop on Agents", "Findings of ACL 2026", "EMNLP 2026", "Under review at ICLR 2026",
+                   "COLM 2026", "arXiv.org", "ICSE-NIER '26"):
+            self.assertIsNone(venues.classify(s_), s_)
+        self.assertEqual(venues.best([("s2", "arXiv.org"), ("作者自称", "ICML 2026")])["source"], "作者自称")
+        self.assertTrue(venues.not_main_doi("10.18653/v1/2025.findings-acl.123"))
+        self.assertFalse(venues.not_main_doi("10.18653/v1/2025.acl-long.123"))
+
+    def test_build(self):
+        from unittest import mock
+        from workbench.papers import results, store, topvenue
+        fieldmod.init_from("mas-arch-opt")
+        base = {"intake": {"state": "relevant"}, "sources": []}
+        store.save(dict(base, id="arxiv-9999.50001", title="Classic", top_venue={"name": "ICLR", "tier": "ICLR", "year": 2025, "date": "2025-01-22"}, citations=300))
+        store.save(dict(base, id="arxiv-9999.50002", title="New accepted", top_venue={"name": "ICML", "tier": "CCF-A 会议", "year": 2026, "date": "2026-07-01"}, citations=3))
+        store.save(dict(base, id="arxiv-9999.50003", title="Not top", citations=999))
+        store._cache.clear()
+        with mock.patch.object(results, "all_rows", return_value=[]):
+            out = topvenue.build(log=lambda *a: None)
+        d = topvenue.load()
+        self.assertEqual([x["pid"] for x in d["must"]], ["arxiv-9999.50001"])           # 引用高 → 必读
+        self.assertIn("arxiv-9999.50002", [x["pid"] for x in d["worth"]])               # 其余顶会 → 值得读
+        self.assertNotIn("arxiv-9999.50003", [x["pid"] for x in d["must"] + d["worth"]])
+        self.assertGreaterEqual(out["must"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()
