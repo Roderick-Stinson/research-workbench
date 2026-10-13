@@ -302,8 +302,9 @@ def hf_section(day: str, iss: dict, log) -> dict:
             continue
         if m.get("hf_shown") and m["hf_shown"] != day:
             continue  # 之前某期已经出现过
-        if (m.get("_status") or {}).get("irrelevant"):
-            continue
+        st = m.get("_status") or {}
+        if st.get("irrelevant") or (st.get("rating") or {}).get("score", 5) <= 2 or m.get("unpicked"):
+            continue  # 不相关、评价差、或者重新精选时被换掉的论文不再推回来
         ev = rigor.evidence(m["id"], rows, std)
         cands.append({"pid": m["id"], "upvotes": (m.get("attention") or {}).get("hf_upvotes") or 0, "hf_day": max(refs),
                       "evidence": ev})
@@ -451,6 +452,12 @@ def repick(day: str | None = None, reason: str = "", log=print) -> dict:
     save_issue(iss)
     _step(iss, "explain", lambda: explain_picks(day, iss, log), log)
     keep = {p["pid"] for p in old} & {p["pid"] for p in iss["picks"]}
+    for p in old:
+        if p["pid"] not in keep:
+            m = store.load(p["pid"])
+            if m:
+                m["unpicked"] = {"day": day, "at": now_iso(), "reason": reason}
+                store.save(m)
     log(f"重新精选：{len(iss['picks'])} 篇，其中 {len(keep)} 篇与原精选相同")
     return {"picks": [p["pid"] for p in iss["picks"]], "kept": sorted(keep),
             "dropped": [p["pid"] for p in old if p["pid"] not in keep]}

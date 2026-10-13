@@ -507,6 +507,11 @@ class TestHFSection(unittest.TestCase):
             store.save({"id": pid, "arxiv": pid.split("-")[1], "title": pid, "intake": {"state": state}, "published": ref,
                         "sources": [{"name": "hf", "ref": ref}], "attention": {"hf_upvotes": up}})
         m = store.load("arxiv-9999.40005"); m["picked"] = {"day": day}; store.save(m)   # 已进精选：不重复
+        store.save({"id": "arxiv-9999.40006", "title": "x", "intake": {"state": "relevant"}, "sources": [{"name": "hf", "ref": day}],
+                    "attention": {"hf_upvotes": 999}, "unpicked": {"day": "2026-10-12"}})        # 重新精选时被换掉：不推回来
+        store.save({"id": "arxiv-9999.40007", "title": "y", "intake": {"state": "relevant"}, "sources": [{"name": "hf", "ref": day}],
+                    "attention": {"hf_upvotes": 998}})
+        store.save_status("arxiv-9999.40007", {"rating": {"score": 1}})                          # 评价差：不推回来
         store._cache.clear()
         iss = {"day": day, "steps": {}, "picks": []}
         pipeline.hf_section(day, iss, lambda *a: None)
