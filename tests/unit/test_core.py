@@ -570,11 +570,14 @@ class TestTopVenue(unittest.TestCase):
         store.save(dict(base, id="arxiv-9999.50001", title="Classic", top_venue={"name": "ICLR", "tier": "ICLR", "year": 2025, "date": "2025-01-22"}, citations=300))
         store.save(dict(base, id="arxiv-9999.50002", title="New accepted", top_venue={"name": "ICML", "tier": "CCF-A 会议", "year": 2026, "date": "2026-07-01"}, citations=3))
         store.save(dict(base, id="arxiv-9999.50003", title="Not top", citations=999))
+        store.save(dict(base, id="arxiv-9999.50004", title="MetaGPT: Meta Programming", top_venue={"name": "ICLR", "tier": "ICLR", "year": None, "date": "2023-08-01"}, citations=0))
         store._cache.clear()
-        with mock.patch.object(results, "all_rows", return_value=[]):
+        cmp_rows = [{"pid": f"p{i}", "mkey": "metagpt", "is_proposed": False, "dataset": "X", "method": "MetaGPT", "scale": {"status": "full"}}
+                    for i in range(4)]
+        with mock.patch.object(results, "all_rows", return_value=cmp_rows):
             out = topvenue.build(log=lambda *a: None)
         d = topvenue.load()
-        self.assertEqual([x["pid"] for x in d["must"]], ["arxiv-9999.50001"])           # 引用高 → 必读
+        self.assertEqual([x["pid"] for x in d["must"]], ["arxiv-9999.50001", "arxiv-9999.50004"])  # 引用高；标题短名 MetaGPT 被 4 篇对比
         self.assertIn("arxiv-9999.50002", [x["pid"] for x in d["worth"]])               # 其余顶会 → 值得读
         self.assertNotIn("arxiv-9999.50003", [x["pid"] for x in d["must"] + d["worth"]])
         self.assertGreaterEqual(out["must"], 1)

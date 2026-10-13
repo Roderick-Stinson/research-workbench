@@ -152,7 +152,7 @@ def build_rows() -> list:
             if nstat == "missing":
                 continue  # 核对后原文里找不到这个方法：抽错了，不进表
             name = _clean_name(name)
-            if proposed_keys and m_key(name) not in proposed_keys:
+            if proposed_keys and not any(m_key(name) == k or m_key(name).startswith(k) for k in proposed_keys):
                 prop = False  # 别人的方法在本文框架里的复现（如 "MetaGPT (MASFactory)"）不算本文方法
             elif not proposed_keys and prop is not False and _hosted(raw):
                 prop = False  # 还没做方法名核对时，"AutoGen (+AgentPrune)"、"MetaGPT (MASFactory)" 保守地不算本文方法
