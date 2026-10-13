@@ -192,6 +192,13 @@ def build(log=print) -> dict:
     own_by_pid = defaultdict(set)
     for mk, o in own.items():
         own_by_pid[o["pid"]].add(mk)
+    for m in store.all_papers():  # 本文方法还可以来自方法名核对、标题冒号前的短名（"MetaGPT: …"）
+        qr = m.get("_qr") or {}
+        for n in (qr.get("method_check") or {}).get("proposed") or []:
+            own_by_pid[m["id"]].add(results.m_key(n))
+        head = (m.get("title") or "").split(":")[0].strip()
+        if ":" in (m.get("title") or "") and 0 < len(head.split()) <= 2 and len(head) <= 24:
+            own_by_pid[m["id"]].add(results.m_key(head))
     compared = defaultdict(set)
     for r in rows:
         if not r["is_proposed"]:
@@ -209,7 +216,7 @@ def build(log=print) -> dict:
         if v.get("year") and v["year"] < MIN_YEAR:
             continue
         qr = m.get("_qr") or {}
-        mks = own_by_pid.get(m["id"], set())
+        mks = {k for k in own_by_pid.get(m["id"], set()) if k and k != "?"}
         n_cmp = max((len(compared[k] - {m["id"]}) for k in mks), default=0)
         cites = m.get("citations") or 0
         date = v.get("date") or m.get("published") or ""
