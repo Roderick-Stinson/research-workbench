@@ -104,6 +104,20 @@ def index_path():
 _SUP = str.maketrans("0123456789+-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻")
 
 
+_MODEL_IN_PAREN = re.compile(r"gpt|claude|qwen|llama|deepseek|gemini|mistral|o\d|glm|kimi|grok|phi|gemma|\d+b\b", re.I)
+
+
+def _hosted(raw: str) -> bool:
+    """"X (+Y)" 或 "X (Y)"（Y 不是模型名 / 配置）：多半是别人的方法 X 在本文框架 Y 里跑。"""
+    m = re.match(r"^\s*([^()（）]+?)\s*[(（]\s*(\+)?\s*([^()（）]+?)\s*[)）]\s*$", raw or "")
+    if not m:
+        return False
+    inner = m.group(3)
+    if m.group(2):
+        return True
+    return bool(re.match(r"^[A-Z][\w-]{2,}$", inner)) and not _MODEL_IN_PAREN.search(inner) and not re.search(r"ours|w/o|w/", inner, re.I)
+
+
 def _clean_name(n: str) -> str:
     """显示用：全角括号、LaTeX（$\\mathcal{ANN}$ → ANN，E$^3$ → E³）、多余空白。"""
     n = (n or "?").replace("（", " (").replace("）", ")")
@@ -125,16 +139,23 @@ def build_rows() -> list:
         qr = m.get("_qr") or {}
         evs = {datasets.key(e["task"]): e for e in qr.get("eval_sets") or [] if e.get("task")}
         for r in qr.get("results") or []:
-            if not isinstance(r.get("value"), (int, float)) or isinstance(r.get("value"), bool):
+            if not isinstance(r, dict) or not isinstance(r.get("value"), (int, float)) or isinstance(r.get("value"), bool):
                 continue
+            r = {k: (str(v) if k in ("method", "task", "metric", "backbone", "where", "unit") and v is not None
+                     and not isinstance(v, str) else v) for k, v in r.items()}  # 模型偶尔把字段写成数字
             ds = datasets.lookup(r.get("task"), reg)
             if ds.get("aggregate"):
                 continue
             raw = (r.get("method") or "?").strip()
             name, prop, nstat = namecheck.corrected(qr, raw)
+            proposed_keys = {m_key(x) for x in ((qr.get("method_check") or {}).get("proposed") or [])}
             if nstat == "missing":
                 continue  # 核对后原文里找不到这个方法：抽错了，不进表
             name = _clean_name(name)
+            if proposed_keys and m_key(name) not in proposed_keys:
+                prop = False  # 别人的方法在本文框架里的复现（如 "MetaGPT (MASFactory)"）不算本文方法
+            elif not proposed_keys and prop is not False and _hosted(raw):
+                prop = False  # 还没做方法名核对时，"AutoGen (+AgentPrune)"、"MetaGPT (MASFactory)" 保守地不算本文方法
             if nstat == "renamed" and name == _clean_name(raw):
                 nstat = "ok"
             ev = evs.get(datasets.key(r.get("task"))) or evs.get(datasets.key(ds["name"]))

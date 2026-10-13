@@ -243,6 +243,8 @@ class TestResultsTable(unittest.TestCase):
         self.assertEqual(results.m_key("DMoA (Few-shot + TTT)"), results.m_key("DMoA (Ours)"))
         self.assertNotEqual(results.m_key("AFlow w/o search"), results.m_key("AFlow"))
         self.assertEqual(results._clean_name("$\\mathcal{ANN}$"), "ANN")
+        self.assertTrue(results._hosted("AutoGen (+AgentPrune)") and results._hosted("MetaGPT (MASFactory)"))
+        self.assertFalse(results._hosted("DyFlow (GPT-4.1-mini)") or results._hosted("MaAS (Ours)") or results._hosted("AFlow (20iter)"))
         self.assertEqual(results._clean_name("E$^3$-Orch"), "E³-Orch")
         self.assertEqual(results._clean_name("Plan-merge (CC \\,\\, Codex)"), "Plan-merge (CC Codex)")
         self.assertNotEqual(results.m_key("HieraMAS (w/o LLM Selection)"), results.m_key("HieraMAS"))
@@ -344,6 +346,7 @@ class TestResultsPipeline(unittest.TestCase):
         qr = store.load_quickread(pids[1])
         qr["results"] += [{"method": "MASS", "is_proposed": False, "task": "GSM8K", "metric": "acc", "value": 70, "where": "T3"},
                           {"method": "CountBug", "task": "GSM8K", "metric": "Accuracy", "value": 139.6, "where": "T3"},
+                          {"method": "NumBackbone", "task": "GSM8K", "metric": "Accuracy", "value": 50, "backbone": 4.1, "where": 7},
                           {"method": "Bogus Avg.", "task": "GSM8K", "metric": "acc", "value": 1, "where": "T3"}]
         store.save_quickread(pids[1], qr)
         store._cache.clear()
@@ -557,6 +560,7 @@ class TestTopVenue(unittest.TestCase):
         self.assertEqual(venues.best([("s2", "arXiv.org"), ("作者自称", "ICML 2026")])["source"], "作者自称")
         self.assertTrue(venues.not_main_doi("10.18653/v1/2025.findings-acl.123"))
         self.assertFalse(venues.not_main_doi("10.18653/v1/2025.acl-long.123"))
+        self.assertIsNone(venues.classify("International Conference on Learning Representations")["year"])  # 不猜年份
 
     def test_build(self):
         from unittest import mock

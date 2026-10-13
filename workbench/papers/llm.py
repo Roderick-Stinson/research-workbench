@@ -297,7 +297,7 @@ def _fake(task: str, user: str):
         for i, n in re.findall(r"^\[(\d+)\] (.*?)  ——", user, re.M):
             items.append({"i": int(i), "name": None if n.startswith("Bogus") else ("MANGO" if n == "MASS" else n),
                           "is_proposed": n in ("Ours", "MASS")})
-        return {"proposed": ["Ours"], "items": items}
+        return {"proposed": ["Ours", "MANGO"], "items": items}
     if task == "taste":
         return {"items": [{"i": int(i), "like": 0.1 if "Recursive" in t else 0.9, "accept": 3 if "Weak" in t else 7, "reason": "（假模型）"}
                           for i, t in re.findall(r"^\[(\d+)\] (.*)$", user, re.M)]}
