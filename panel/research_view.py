@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 
 from workbench import config
 from workbench.papers import field as fieldmod
-from workbench.papers import codecheck, datasets, fieldmap, ideate, reports, results, store
+from workbench.papers import codecheck, datasets, fieldmap, ideate, reports, results, store, topvenue
 from workbench.util import read_json
 
 
@@ -93,6 +93,19 @@ def register(app, render):
         if "/" in pid or ".." in pid or not p.exists():
             raise HTTPException(404)
         return FileResponse(p, media_type="text/html")
+
+    @app.get("/must-read", response_class=HTMLResponse)
+    def must_read_page(request: Request, tab: str = "must", order: str = "new", tier: str = ""):
+        d = topvenue.load()
+        items = d.get("worth" if tab == "worth" else "must") or []
+        tiers = sorted({x["venue"]["tier"] for x in (d.get("must") or []) + (d.get("worth") or [])})
+        if tier:
+            items = [x for x in items if x["venue"]["tier"] == tier]
+        items = sorted(items, key=lambda x: x.get("date") or "", reverse=(order != "old"))
+        codes = {x["pid"]: codecheck.load(x["pid"]) or {} for x in items}
+        sts = {x["pid"]: store.load_status(x["pid"]) for x in items}
+        return render(request, "must_read.html", d=d, items=items, tab=tab, order=order, tier=tier, tiers=tiers,
+                      codes=codes, sts=sts, code_names=codecheck.STATUS)
 
     @app.get("/hot", response_class=HTMLResponse)
     def hot_page(request: Request):

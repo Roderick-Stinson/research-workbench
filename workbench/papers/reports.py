@@ -40,8 +40,13 @@ def hot(day: str, hours: int = 72) -> dict:
     from . import taste
 
     rows = rows[:30]
+    from . import results, rigor
+
+    res_rows = results.all_rows()
+    std = rigor.standards(res_rows)
     for r in rows:
-        r["key"], r["kind"], r["text"] = r["pid"], "论文", r.get("one_liner") or ""
+        r["key"], r["kind"] = r["pid"], "论文"
+        r["text"] = f"{r.get('one_liner') or ''}；{rigor.text(rigor.evidence(r['pid'], res_rows, std))}"
     rows = taste.keep(rows, log=lambda *a: None, label="热点")
     for r in rows:
         for k in ("key", "kind", "text"):
