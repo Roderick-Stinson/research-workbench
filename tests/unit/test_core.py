@@ -5,6 +5,7 @@ import sys
 import tempfile
 import time
 import unittest
+import unittest.mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -521,6 +522,27 @@ class TestHFSection(unittest.TestCase):
         iss2 = {"day": "2026-10-14", "steps": {}, "picks": []}
         pipeline.hf_section("2026-10-14", iss2, lambda *a: None)
         self.assertEqual(iss2["hf"], [])                                                          # 出现过的不再重复
+
+
+class TestTasteScreen(unittest.TestCase):
+    def test_screen_everywhere(self):
+        from workbench.papers import taste
+        os.environ["WB_LLM_PROTOCOL"] = "fake"
+        try:
+            fieldmod.init_from("mas-arch-opt")
+            items = [{"key": "a", "kind": "论文", "title": "Cut token cost by 90%"}, {"key": "b", "kind": "代码仓库", "title": "Better workflow search"}]
+            with unittest.mock.patch.object(taste, "has_taste", return_value=False):
+                self.assertEqual(taste.keep([dict(x) for x in items], log=lambda *a: None), items)  # 没有口味：不过滤
+            f = fieldmod.field()
+            f["taste"] = {"likes": ["提点"], "dislikes": ["省 token"]}
+            fieldmod.save_field(f)
+            out = taste.keep([dict(x) for x in items], log=lambda *a: None)
+            self.assertEqual([x["key"] for x in out], ["b"])
+            self.assertTrue(out[0]["like_reason"])
+            with unittest.mock.patch.object(taste.llm, "chat", side_effect=taste.llm.LLMPaused("额度", time.time() + 60)):
+                self.assertEqual(len(taste.keep([dict(x) for x in items], log=lambda *a: None)), 2)  # 模型不可用：照常展示
+        finally:
+            os.environ.pop("WB_LLM_PROTOCOL", None)
 
 
 if __name__ == "__main__":

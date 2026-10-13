@@ -37,6 +37,15 @@ def hot(day: str, hours: int = 72) -> dict:
                      "hn_comments": att.get("hn_comments") or 0, "hn_links": att.get("hn_links") or [],
                      "sources_n": att.get("sources_n") or 1, "one_liner": qr.get("one_liner")})
     rows.sort(key=lambda r: -r["heat"])
+    from . import taste
+
+    rows = rows[:30]
+    for r in rows:
+        r["key"], r["kind"], r["text"] = r["pid"], "论文", r.get("one_liner") or ""
+    rows = taste.keep(rows, log=lambda *a: None, label="热点")
+    for r in rows:
+        for k in ("key", "kind", "text"):
+            r.pop(k, None)
     out = {"day": day, "window_hours": hours, "generated_at": now_iso(), "items": rows[:20]}
     write_json(config.home() / "reports" / "hot.json", out)
     return out

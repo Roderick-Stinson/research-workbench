@@ -169,6 +169,15 @@ def run(day: str, log=print, n: int | None = None) -> dict:
                 reviews[futs[fu]] = fu.result()
             except Exception as e:  # noqa: BLE001
                 reviews[futs[fu]] = {"verdict": "error", "error": str(e)[:300]}
+    # 口味过滤（ADR-0039）：评审通过但不合本人口味的不告知，和没通过评审的放在一起、写明原因
+    from . import taste
+
+    ok = [{"key": i, "kind": "研究想法", "title": c.get("title"), "text": c.get("summary") or ""}
+          for i, c in enumerate(cands) if (reviews.get(i) or {}).get("verdict") == "pass"]
+    sc = taste.screen(ok, log=log)
+    for i, s in sc.items():
+        if s["like"] < taste.min_like():
+            reviews[i] = dict(reviews[i], verdict="taste", taste=s)
     passed, hidden = [], []
     for i, c in enumerate(cands):
         rv = reviews.get(i) or {"verdict": "error"}
@@ -192,7 +201,7 @@ def run(day: str, log=print, n: int | None = None) -> dict:
             write_json(d / "review.json", rv)
             write_json(d / "idea.json", {"id": iid, "title": c.get("title"), "summary": c.get("summary"),
                                          "status": "rejected", "informed": False, "created_at": now_iso(), "day": day,
-                                         "score": rv.get("mean"), "verdict": rv.get("verdict")})
+                                         "score": rv.get("mean"), "verdict": rv.get("verdict"), "taste": rv.get("taste")})
             hidden.append(iid)
     log(f"评审通过 {len(passed)} 个，未通过 {len(hidden)} 个")
     return {"candidates": len(cands), "passed": passed, "hidden": len(hidden)}
