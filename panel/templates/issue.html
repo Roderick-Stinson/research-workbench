@@ -24,6 +24,16 @@
 <div class="empty"><p>今天没有达到质量门槛的新论文。</p></div>
 {% endif %}
 
+{% if hf %}
+<h2>🤗 HF Daily · 你的方向 <span class="count">{{ hf|length }} 篇 · 按点赞；属于你的方向，但不算精选、没过 baseline 门槛与中稿评估</span></h2>
+<div class="plist">{% for x in hf %}{{ paper_card(x, field, compact=True) }}
+  {%- set ev = x.hf.evidence or {} -%}
+  <p class="small hfnote">👍 {{ x.hf.upvotes }} · HF Daily {{ x.hf.hf_day }} ·
+  {% if ev.std_baselines %}<span class="badge ok">对比 {{ ev.std_baselines[:4]|join('、') }}</span>{% else %}<span class="badge warn">没和领域常用方法比较</span>{% endif %}
+  {% if ev.std_benchmarks %}<span class="badge">{{ ev.std_benchmarks[:4]|join('、') }}</span>{% endif %}</p>
+{% endfor %}</div>
+{% endif %}
+
 {% if progress %}
 <h2>进展 <span class="count">{{ progress|length }}</span></h2>
 <div class="box">{% for g in progress %}<div class="inbox-item"><div><a href="/paper/{{ g.m.id }}">{{ g.qr.title_zh or g.m.title }}</a></div><div class="meta">{{ g.g.text }}</div></div>{% endfor %}</div>

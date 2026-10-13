@@ -20,7 +20,8 @@ DEFAULT_FIELD = {
     "arxiv_keywords": [],
     "arxiv_categories": ["cs.AI", "cs.CL", "cs.LG"],
     "facets": {"kind": {"label": "论文类型", "primary": True, "values": ["方法", "评测 / 基准", "分析 / 理论", "综述", "系统 / 工具"]}},
-    "selection": {"max_per_day": 10, "min_quality": 6.0, "pick_window_days": 90, "require_std_baselines": True, "min_accept": 5},
+    "selection": {"max_per_day": 10, "min_quality": 6.0, "pick_window_days": 90, "require_std_baselines": True, "min_accept": 5,
+                  "hf_max_per_day": 5, "hf_window_days": 7},
 }
 
 EXAMPLES = Path(__file__).resolve().parent.parent.parent / "examples" / "fields"
