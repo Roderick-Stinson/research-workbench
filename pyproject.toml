@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "workbench"
-version = "0.6.0"
+version = "0.7.0"
 description = "实验工作台：自动抓实验现场（代码 / 命令 / 环境 / 产物），说'记录'时由 agent 认领到 论文 → claim → 配置组"
 readme = "README.md"
 requires-python = ">=3.9"
