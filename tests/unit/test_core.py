@@ -613,5 +613,31 @@ class TestMapView(unittest.TestCase):
             os.environ.pop("WB_LLM_PROTOCOL", None)
 
 
+class TestMapRebuild(unittest.TestCase):
+    def test_fresh_prompt_and_digest(self):
+        from unittest import mock
+        from workbench.papers import fieldmap, store
+        fieldmod.init_from("mas-arch-opt")
+        store.save({"id": "arxiv-9999.70001", "title": "X", "intake": {"state": "relevant"}, "sources": [], "citations": 12,
+                    "top_venue": {"name": "ICML"}, "themes": ["topology"]})
+        store.save_quickread("arxiv-9999.70001", {"one_liner": "x"})
+        store._cache.clear()
+        d = {x["id"]: x for x in fieldmap._library_digest()}["arxiv-9999.70001"]
+        self.assertEqual((d["top_venue"], d["citations"], d["themes"]), ("ICML", 12, ["topology"]))
+        seen = {}
+
+        def fake_run(task, w, prompt):
+            seen["prompt"] = prompt
+            return {"ok": False, "error": "测试"}
+        with mock.patch.object(fieldmap.codex, "run", side_effect=fake_run):
+            with self.assertRaises(RuntimeError):
+                fieldmap.rebuild(log=lambda *a: None, fresh=True)
+        self.assertIn("全面重建", seen["prompt"])
+        with mock.patch.object(fieldmap.codex, "run", side_effect=fake_run):
+            with self.assertRaises(RuntimeError):
+                fieldmap.rebuild(log=lambda *a: None)
+        self.assertNotIn("全面重建", seen["prompt"])
+
+
 if __name__ == "__main__":
     unittest.main()

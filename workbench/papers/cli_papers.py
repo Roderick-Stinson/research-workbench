@@ -312,7 +312,7 @@ def cmd_map(a):
         for v in fieldmap.versions():
             print(v)
     elif a.action == "rebuild":
-        print(fieldmap.rebuild())
+        print(fieldmap.rebuild(fresh=a.fresh))
 
 
 def cmd_results(a):
@@ -431,9 +431,10 @@ def register(add):
     p.add_argument("--reason")
     p.add_argument("--claim", help="promote：升级成的 claim，如 mypaper/C2")
     add("problem", cmd_problem, "列出问题 Problem")
-    p = add("map", cmd_map, "领域地图：show / versions / rebuild")
+    p = add("map", cmd_map, "领域地图：show / versions / rebuild [--fresh]")
     p.add_argument("action", choices=["show", "versions", "rebuild"])
     p.add_argument("--version", type=int)
+    p.add_argument("--fresh", action="store_true", help="rebuild：全面重建（重新划分类别、重选代表工作、重写没考虑到什么），不照搬上一版")
     p = add("results", cmd_results, "跨论文结果表：不给参数列数据集；<数据集> 看报告；refresh 归类 + 补评测规模 / 方法名核对 + 核实代码 + 重建索引")
     p.add_argument("task", nargs="*")
     p.add_argument("--limit", type=int, default=0)

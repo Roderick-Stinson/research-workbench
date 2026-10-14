@@ -54,6 +54,20 @@ def _save_new(m: dict) -> int:
 
 
 def _library_digest() -> list:
+    """给 codex 的论文清单：内容 + 影响力信号（顶会顶刊、引用数、被论文库里多少篇当作对比方法、是否必读）+ 研究主题。"""
+    from . import results, topvenue
+
+    must = {x["pid"] for x in (topvenue.load().get("must") or [])}
+    try:
+        rows = results.all_rows()
+        own = topvenue.own_keys(rows)
+        cmp = {}
+        for r in rows:
+            if not r["is_proposed"]:
+                cmp.setdefault(r["mkey"], set()).add(r["pid"])
+        compared = {pid: max((len(cmp.get(k, set()) - {pid}) for k in ks), default=0) for pid, ks in own.items()}
+    except Exception:  # noqa: BLE001  统计失败不影响重组
+        compared = {}
     out = []
     for m in store.all_papers():
         if m.get("intake", {}).get("state") != "relevant":
@@ -63,6 +77,8 @@ def _library_digest() -> list:
                     "published": m.get("published"), "venue": m.get("venue"), "seed": bool(m.get("seed")),
                     "one_liner": qr.get("one_liner"), "method": (qr.get("quickread") or {}).get("method"),
                     "limitations": (qr.get("quickread") or {}).get("limitations"), "facets": qr.get("facets"),
+                    "top_venue": (m.get("top_venue") or {}).get("name"), "citations": m.get("citations"),
+                    "compared_by": compared.get(m["id"], 0), "must_read": m["id"] in must, "themes": m.get("themes"),
                     "my_rating": {k: r.get(k) for k in ("score", "note")} if (r := (m.get("_status") or {}).get("rating")) else None})
     return out
 
@@ -70,18 +86,20 @@ def _library_digest() -> list:
 REBUILD_PROMPT = """你在为研究方向「{name}」整理一份 Related Work 式的领域地图（ADR-0021）。
 
 输入（当前目录）：
-- library.json：论文库里属于该方向的全部论文（id、标题、一句话、方法、局限、维度标签）
+- library.json：论文库里属于该方向的全部论文（id、标题、一句话、方法、局限、维度标签、研究主题 themes，
+  以及影响力：top_venue 顶会顶刊、citations 引用数、compared_by 被论文库里多少篇当作对比方法、must_read 是否必读）
 - previous_map.json：上一版地图（没有就是第一版）
 - field.json：方向描述与维度定义
 
 要求：
 1. 主分类按维度「{primary_label}」切分（可以细化、合并原有取值），通常 4–8 类；每类写：
    - name：类名；idea：这一类的核心思路（1–2 句）；
-   - representative：2–5 篇代表工作（只能用 library.json 里的 id）；
+   - representative：3–6 篇代表工作（只能用 library.json 里的 id）：优先这一类的里程碑（must_read、compared_by 高、顶会顶刊），
+     再加 1–2 篇近半年最有代表性的新工作；
    - members：属于这一类的全部论文 id（每篇只归一个主类，跨类的按主要贡献归）；
    - missing：这一类**没考虑到什么**（要具体，最好能指出 2 篇以上论文共有的局限，引用其 id）；
    - prose：一段 Related Work 文体的中文叙述（3–6 句），提到代表工作时用 [id] 标注。
-2. 与上一版相比如果重组了（拆 / 合 / 改名），在 changes 里说明；没有大变化就尽量保持类别稳定。
+2. 与上一版相比如果重组了（拆 / 合 / 改名），在 changes 里说明；没有大变化就尽量保持类别稳定。{fresh}
 3. 只能依据输入里的信息，不要编造论文或结论。
 输出：把 JSON 写到 ./map.json，结构：
 {{"primary": {{"facet": "{primary_key}", "categories": [{{"id": "c1", "name": "", "idea": "", "representative": [], "members": [], "missing": "", "prose": ""}}]}},
@@ -90,7 +108,12 @@ REBUILD_PROMPT = """你在为研究方向「{name}」整理一份 Related Work �
 """
 
 
-def rebuild(log=print) -> dict:
+FRESH = """
+**本次是全面重建**（本人要求）：论文库比上一版大了很多。不要照搬上一版——重新评估类别划分（该拆就拆、该合就合），
+按上面的标准重选每一类的代表工作，并根据现在的论文重写 idea、missing、prose 和 overview；上一版只作参考。"""
+
+
+def rebuild(log=print, fresh: bool = False) -> dict:
     f = fieldmod.field()
     pk = next((k for k, d in f["facets"].items() if d.get("primary")), "optimizes")
     w = map_dir() / "work"
@@ -101,7 +124,7 @@ def rebuild(log=print) -> dict:
     (w / "field.json").write_text(json.dumps(f, ensure_ascii=False))
     (w / "map.json").unlink(missing_ok=True)
     res = codex.run("map:rebuild", w, REBUILD_PROMPT.format(name=f["name"], primary_label=f["facets"][pk]["label"],
-                                                             primary_key=pk))
+                                                             primary_key=pk, fresh=FRESH if fresh else ""))
     if not res["ok"] or not (w / "map.json").exists():
         raise RuntimeError(f"领域地图重组失败：{res.get('error') or '没有产出 map.json'}")
     m = json.loads((w / "map.json").read_text())
