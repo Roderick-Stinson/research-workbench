@@ -2,7 +2,8 @@
 {% block title %}IDEA · 实验工作台{% endblock %}
 {% block body %}
 <h1>IDEA</h1>
-<p class="sub">每天根据论文库、领域地图、实验与 bad case 构思，独立审稿（新颖性 / 问题真实性一票否决 + 均分 ≥ 7）通过的才出现在这里。只有你说删除才会删除。</p>
+<p class="sub">每天根据论文库、领域地图、实验与 bad case 构思 4 个候选，独立审稿（新颖性 / 问题真实性一票否决 + 均分 ≥ 7）通过的才出现在这里并推送给你；
+均分 ≥ 6 且没被否决的会按审稿意见修改一轮再评。只有你说删除才会删除。</p>
 {% if ideas %}
 <div class="plist">
 {% for i in ideas %}
@@ -20,6 +21,23 @@
 {% endfor %}
 </div>
 {% else %}
-<div class="empty"><p>还没有通过评审的 IDEA。论文库积累到一定规模后，每日流程会开始构思。</p></div>
+<div class="empty"><p>还没有通过评审的 IDEA。每天都在构思，但到目前为止 {{ n_rejected }} 个候选都没过独立审稿（标准不放低）；下面是构思记录和最接近通过的几个。</p></div>
+{% endif %}
+
+{% if days %}
+<h2>构思记录 <span class="count">每天的候选数与审稿结果</span></h2>
+<div class="box"><table><thead><tr><th>日期</th><th class="num">候选</th><th class="num">通过</th><th class="num">一票否决</th><th class="num">没评成（额度）</th></tr></thead><tbody>
+{% for d in days %}<tr><td class="mono">{{ d.day }}</td><td class="num">{{ d.total }}</td><td class="num">{{ d.passed }}</td><td class="num">{{ d.veto }}</td><td class="num">{{ d.error }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endif %}
+
+{% if near %}
+<details style="margin-top:18px"><summary><b>最接近通过的</b> <span class="small muted">没有一票否决、均分 ≥ 6，但没到 7；不推送，只在这里列出。均分 6 以上的候选会按审稿意见修改一轮再评。</span></summary>
+<div class="plist" style="margin-top:10px">{% for r in near[:10] %}
+<article class="pcard"><div class="ph"><div><span class="pt">{{ r.title }}</span><div class="po mono">{{ r.id }} · {{ r.day }}{% if r.revised %} · 已修改重评{% endif %}</div></div></div>
+  <p class="pl small">{{ r.review_summary }}</p>
+  <div class="pm"><span>审稿均分 {{ r.score }}</span>{% if r.scores %}<span class="small muted">重要性 {{ r.scores.significance }} · 新颖性 {{ r.scores.novelty }} · 深度 {{ r.scores.depth }} · 可行性 {{ r.scores.feasibility }}</span>{% endif %}
+  <button class="copy sm" data-text="把 IDEA {{ r.id }}（{{ r.title }}）翻出来给我看，包括审稿意见">复制「翻出来看」</button></div>
+</article>{% endfor %}</div></details>
 {% endif %}
 {% endblock %}

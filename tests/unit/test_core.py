@@ -639,5 +639,47 @@ class TestMapRebuild(unittest.TestCase):
         self.assertNotIn("全面重建", seen["prompt"])
 
 
+class TestIdeateRevise(unittest.TestCase):
+    def test_near_miss_revised_and_rereviewed(self):
+        import json as _json
+        from unittest import mock
+        from workbench.papers import ideate, store
+        fieldmod.init_from("mas-arch-opt")
+        for i in range(12):
+            store.save({"id": f"arxiv-9999.8{i:04d}", "title": f"P{i}", "intake": {"state": "relevant"}, "sources": []})
+            store.save_quickread(f"arxiv-9999.8{i:04d}", {"one_liner": "x"})
+        store._cache.clear()
+        calls = []
+
+        def fake_run(task, w, prompt, network=False):
+            calls.append(task)
+            w = Path(w)
+            if task.startswith("ideate:"):
+                self.assertIn("past_reviews.json", prompt)
+                (w / "candidates.json").write_text(_json.dumps({"candidates": [{"title": "Near", "summary": "s"}, {"title": "Dup", "summary": "s"}]}))
+            elif task.startswith("review:"):
+                c = _json.loads((w / "candidate.json").read_text())
+                if c["title"] == "Dup":
+                    rv = {"novelty_veto": True, "scores": {"significance": 7, "novelty": 2, "depth": 5, "feasibility": 5}}
+                elif c.get("revision"):
+                    rv = {"scores": {"significance": 8, "novelty": 7, "depth": 7, "feasibility": 7}, "summary": "改好了"}
+                else:
+                    rv = {"scores": {"significance": 7, "novelty": 6, "depth": 6, "feasibility": 6}, "weaknesses": ["缺形式化"]}
+                (w / "review.json").write_text(_json.dumps(rv))
+            elif task.startswith("revise:"):
+                (w / "revised.json").write_text(_json.dumps({"title": "Near v2", "summary": "s2"}))
+                (w / "response.json").write_text(_json.dumps({"changes": ["补了形式化"]}))
+            else:
+                return {"ok": False, "error": "测试里不写文档"}
+            return {"ok": True}
+        with mock.patch.object(ideate.codex, "run", side_effect=fake_run):
+            res = ideate.run("2026-10-14", log=lambda *a: None)
+        self.assertEqual(res["revised"], 1)                       # 只有没被否决、均分 ≥ 6 的改一轮
+        self.assertEqual([p["title"] for p in res["passed"]], ["Near v2"])
+        self.assertEqual(sum(1 for c in calls if c.startswith("revise:")), 1)
+        past = ideate.past_reviews()
+        self.assertTrue(any(p["title"] == "Dup" and p["novelty_veto"] for p in past))
+
+
 if __name__ == "__main__":
     unittest.main()
