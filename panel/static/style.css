@@ -210,3 +210,36 @@ table.rtab a.v.r2 { text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 760px) {
   table.rtab .m { min-width: 120px; }
 }
+
+/* ---------- 领域地图 ---------- */
+.timeline { border-left: 2px solid var(--line); margin-left: 6px; padding-left: 18px; }
+.era { margin: 0 0 22px; position: relative; }
+.era::before { content: ""; position: absolute; left: -25px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+.era-h { font-size: 15px; }
+.era-p { font-family: var(--mono); color: var(--accent); margin-right: 6px; }
+.era-s { margin: 6px 0 8px; color: var(--ink-2); }
+.lms { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 8px; }
+.lm { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+table.trend td, table.trend th { padding: 6px 10px; vertical-align: middle; }
+table.trend.mini td { padding: 3px 6px; border: 0; }
+.spark path { fill: none; stroke: var(--accent); stroke-width: 1.6; }
+.spark circle.hi { fill: var(--accent); }
+.spark circle.lo { fill: var(--panel); stroke: var(--accent); stroke-width: 1; }
+.up { color: var(--ok); font-weight: 600; }
+.down { color: var(--bad); font-weight: 600; }
+.bars .bar { display: grid; grid-template-columns: 110px 1fr 36px; gap: 8px; align-items: center; margin: 4px 0; font-size: 12.5px; }
+.bars .bb { background: var(--line-2); border-radius: 4px; height: 10px; overflow: hidden; }
+.bars .bb i { display: block; height: 100%; background: var(--accent); }
+.bars .bn { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.insights { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+.ins { padding: 12px 14px; }
+.ins p { margin: 6px 0; }
+table.ws td, table.ws th { padding: 4px 6px; text-align: center; border: 1px solid var(--line-2); }
+table.ws td:first-child { text-align: left; white-space: nowrap; }
+table.ws td.c0 { background: var(--warn-soft); }
+table.ws td.c1 { background: var(--panel); }
+table.ws td.c2 { background: var(--accent-soft); }
+table.ws td.c3 { background: var(--accent-soft); font-weight: 650; }
+.cats { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+.cat { padding: 12px 14px; }
+.cat p { margin: 6px 0; }

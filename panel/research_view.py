@@ -3,12 +3,14 @@ from __future__ import annotations
 
 from urllib.parse import urlencode
 
+from markupsafe import Markup
+
 from fastapi import HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
 
 from workbench import config
 from workbench.papers import field as fieldmod
-from workbench.papers import codecheck, datasets, fieldmap, ideate, reports, results, store, topvenue
+from workbench.papers import codecheck, datasets, fieldmap, ideate, mapview, reports, results, store, topvenue
 from workbench.util import read_json
 
 
@@ -21,6 +23,19 @@ def _titles(pids):
             out[p] = {"title": qr.get("title_zh") or m.get("title"), "orig": m.get("title"), "arxiv": m.get("arxiv"),
                       "published": m.get("published")}
     return out
+
+
+def _spark(series, w=150, h=34) -> Markup:
+    """占比的小折线（内联 SVG）。样本少（n < 30）的时间段画成空心点。"""
+    pts = [(i, p["share"], p.get("n") or 0) for i, p in enumerate(series) if p.get("share") is not None]
+    if len(pts) < 2:
+        return Markup("")
+    n = len(series)
+    hi = max(v for _, v, _ in pts) or 1
+    xy = [(4 + (w - 8) * i / max(1, n - 1), h - 4 - (h - 8) * v / hi, k) for i, v, k in pts]
+    path = " ".join(f"{'M' if j == 0 else 'L'}{x:.1f},{y:.1f}" for j, (x, y, _) in enumerate(xy))
+    dots = "".join(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="2.2" class="{"lo" if k < 30 else "hi"}"/>' for x, y, k in xy)
+    return Markup(f'<svg class="spark" viewBox="0 0 {w} {h}" width="{w}" height="{h}"><path d="{path}"/>{dots}</svg>')
 
 
 def _qs(base: dict, **kw) -> str:
@@ -38,8 +53,14 @@ def register(app, render):
         vers = fieldmap.versions()
         titles = {}
         if m:
-            titles = _titles({x for c in m["primary"]["categories"] for x in (c.get("members") or []) + (c.get("representative") or [])})
-        return render(request, "map.html", m=m, versions=vers, titles=titles, field=fieldmod.field())
+            titles = _titles({x for c in m["primary"]["categories"] for x in (c.get("representative") or [])})
+        ov = mapview.load()
+        ids_ = {x["id"] for x in ov.get("landmarks") or []}
+        for e in ov.get("insights") or []:
+            ids_ |= {x for x in e.get("evidence") or [] if isinstance(x, str) and x.startswith(("arxiv-", "doi-", "t-"))}
+        titles.update(_titles(ids_ - set(titles)))
+        return render(request, "map.html", m=m, versions=vers, titles=titles, field=fieldmod.field(), ov=ov, spark=_spark,
+                      lm={x["id"]: x for x in ov.get("landmarks") or []})
 
     @app.get("/results", response_class=HTMLResponse)
     def results_page(request: Request, cat: str = "", kind: str = "quality", full: int = 0, abl: int = 0,

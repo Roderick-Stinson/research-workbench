@@ -69,6 +69,28 @@ def linkify_ids(text):
 
 
 tpl.env.filters["ids"] = linkify_ids
+
+
+def linkify_ids_named(text):
+    """同 linkify_ids，但链接文字是论文的短名（标题冒号前的方法名，或截短的标题），不显示 id。
+    [id1, id2] 这种一个括号里多个 id 的写法也认。"""
+    from workbench.papers import store as pstore
+    t = str(escape(text or ""))
+    idrx = r"(?:arxiv-\d{4}\.\d{4,5})|(?:doi-[\w.\-]+)|(?:t-[0-9a-f]{16})"
+
+    def name(pid):
+        m = pstore.load(pid) or {}
+        title = m.get("title") or pid
+        head = title.split(":")[0].strip()
+        return head if ":" in title and len(head) <= 28 else (title[:36] + ("…" if len(title) > 36 else ""))
+
+    def one(mt):
+        ids_ = re.findall(idrx, mt.group(0))
+        return "（" + "、".join(f'<a href="/paper/{i}" title="{escape(i)}">{escape(name(i))}</a>' for i in ids_) + "）"
+    return Markup(re.sub(r"\[\s*(?:" + idrx + r")(?:\s*[,，、]\s*(?:" + idrx + r"))*\s*\]", one, t))
+
+
+tpl.env.filters["ids_named"] = linkify_ids_named
 tpl.env.globals.update(
     human_bytes=human_bytes, human_duration=human_duration, ago=ago, fmt_time=fmt_time, fmt_num=fmt_num,
     fmt_ms=stats.fmt_ms, version=__version__, basename=os.path.basename,

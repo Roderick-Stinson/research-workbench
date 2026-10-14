@@ -304,6 +304,18 @@ def _fake(task: str, user: str):
     if task == "taste-screen":
         return {"items": [{"i": int(i), "like": 0.1 if "token" in t.lower() else 0.9, "reason": "（假模型）"}
                           for i, t in re.findall(r"^\[(\d+)\]（.*?）(.*)$", user, re.M)]}
+    if task == "themes-propose":
+        return {"themes": [{"id": "topology", "name": "拓扑", "desc": "通信拓扑"}, {"id": "workflow", "name": "工作流", "desc": "工作流搜索"}],
+                "changes": "（假模型）"}
+    if task == "themes-assign":
+        return {"items": [{"i": int(i), "themes": ["topology" if "topolog" in t.lower() else "workflow"]}
+                          for i, t in re.findall(r"^\[(\d+)\] (.*)$", user, re.M)]}
+    if task == "map-overview":
+        ids_ = re.findall(r'"id": "([^"]+)"', user)
+        return {"overview": "（假模型）概述", "eras": [{"period": "2025", "title": "（假模型）", "shift": "（假模型）", "landmarks": ids_[:2] + ["bogus-id"],
+                                                        "notes": {}}],
+                "trend_notes": [{"theme": "topology", "note": "（假模型）"}],
+                "insights": [{"title": "（假模型）", "detail": "（假模型）", "evidence": ids_[:1]}]}
     if task == "field-suggest":
         return {"description": "（假模型）新的方向描述", "subtopics": ["子主题 A"], "arxiv_keywords": ["multi-agent", "agentic"],
                 "taste": {"likes": ["（假模型）实验扎实"], "dislikes": ["（假模型）只有 prompt 增量"]},
