@@ -73,6 +73,14 @@ wb field show | wb field set selection.max_per_day=8
 ```
 baseline 一律是种子（ADR-0015）：新建 baseline 配置组时用 `wb variant set <vid> paper=arxiv-xxxx baseline=true`，会自动进入种子。
 
+## 研究线（ADR-0043："我在研究 X 问题" / "帮我深挖这个方向"）
+```bash
+wb thread add "研究问题（用本人的话）" --mine [--path /相关的工作区或结果目录]   # 本人的问题优先推进
+wb thread ls | wb thread show <线>                                               # 看进展、研究记录、当前草稿、审稿意见
+wb thread park <线> --reason "…" | wb thread resume <线> | wb thread drop <线> --reason "本人原话"
+```
+同时最多推进 3 条，每天每条一步；草稿成熟才交审稿，通过的成为 IDEA 并告知本人。
+
 ## IDEA（ADR-0024：告诉过用户的 IDEA，只有用户明确说删除才删）
 ```bash
 wb idea ls [--hidden]                   # --hidden 包括没通过评审的

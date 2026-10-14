@@ -681,5 +681,56 @@ class TestIdeateRevise(unittest.TestCase):
         self.assertTrue(any(p["title"] == "Dup" and p["novelty_veto"] for p in past))
 
 
+class TestThreads(unittest.TestCase):
+    def test_threads_flow(self):
+        import json as _json
+        from unittest import mock
+        from workbench.papers import ideate, store, threads
+        fieldmod.init_from("mas-arch-opt")
+        res_root = Path(_tmp) / "results" / "MaAS" / "gsm8k" / "run1"
+        res_root.mkdir(parents=True, exist_ok=True)
+        (res_root / "predictions.jsonl").write_text('{"id": 1, "prediction": "x"}\n')
+        f = fieldmod.field()
+        f["ideation"] = {"max_active_threads": 2, "max_reviews_per_thread": 2, "badcase_roots": [str(Path(_tmp) / "results")]}
+        fieldmod.save_field(f)
+        for i in range(3):
+            store.save({"id": f"arxiv-9999.9{i:04d}", "title": f"Q{i}", "intake": {"state": "relevant"}, "sources": []})
+            store.save_quickread(f"arxiv-9999.9{i:04d}", {"one_liner": "x"})
+        store._cache.clear()
+        mine = threads.add("我的方法在 MATH 上不稳定，怎么办", "mine", {"paths": ["/x"]})
+        self.assertEqual(mine["status"], "queued")
+        n_steps = {}
+
+        def fake_run(task, w, prompt, network=False):
+            w = Path(w)
+            if task.startswith("thread:"):
+                tid = task.split(":")[1]
+                n_steps[tid] = n_steps.get(tid, 0) + 1
+                self.assertIn("badcase_index.json", prompt)
+                ready = n_steps[tid] >= 2
+                (w / "update.json").write_text(_json.dumps({"did": f"第 {n_steps[tid]} 步", "findings": [{"text": "发现", "refs": ["a"]}],
+                    "idea_draft": {"title": f"草稿 {tid}", "summary": "s"}, "next_steps": ["n1"], "ready_for_review": ready}))
+            elif task.startswith("review:"):
+                (w / "review.json").write_text(_json.dumps({"scores": {"significance": 8, "novelty": 7, "depth": 7, "feasibility": 7}}))
+            else:
+                return {"ok": False, "error": "测试里不写文档"}
+            return {"ok": True}
+        with mock.patch.object(threads.codex, "run", side_effect=fake_run), mock.patch.object(ideate.codex, "run", side_effect=fake_run):
+            r1 = threads.advance("2026-10-15", log=lambda *a: None)
+            kinds = [e["kind"] for e in r1["events"]]
+            self.assertEqual(kinds.count("started"), 2)                    # 本人的问题 + 复现（上限 2）
+            act = [t for t in threads.all_threads() if t["status"] == "active"]
+            self.assertEqual({t["source"] for t in act}, {"mine", "repro"})
+            self.assertEqual(r1["passed"], [])                             # 第一步草稿还不成熟，不交审稿
+            r2 = threads.advance("2026-10-16", log=lambda *a: None)
+        self.assertEqual(len(r2["passed"]), 2)                             # 第二步成熟 → 审稿通过 → 正式 IDEA
+        done = [t for t in threads.all_threads() if t["status"] == "done"]
+        self.assertEqual(len(done), 2)
+        self.assertTrue(all(len(t["steps"]) == 2 for t in done))
+        self.assertTrue(ideate.all_ideas())
+        threads.set_status(mine["id"], "parked", "测试")
+        self.assertEqual(threads.load(mine["id"])["status_reason"], "测试")
+
+
 if __name__ == "__main__":
     unittest.main()

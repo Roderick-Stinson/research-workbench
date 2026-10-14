@@ -2,8 +2,33 @@
 {% block title %}IDEA · 实验工作台{% endblock %}
 {% block body %}
 <h1>IDEA</h1>
-<p class="sub">每天根据论文库、领域地图、实验与 bad case 构思 4 个候选，独立审稿（新颖性 / 问题真实性一票否决 + 均分 ≥ 7）通过的才出现在这里并推送给你；
-均分 ≥ 6 且没被否决的会按审稿意见修改一轮再评。只有你说删除才会删除。</p>
+<p class="sub">研究线每天推进一步（精读、查新、分析失败样本、形式化、设计实验），草稿成熟才交独立审稿（新颖性 / 问题真实性一票否决 + 均分 ≥ 7），
+通过的才出现在下面并推送给你；每周一另做一次广撒网构思。只有你说删除才会删除。</p>
+<h2>研究线 <span class="count">少而深、持续推进；同时最多 {{ tcfg.max_active }} 条，每天每条推进一步，草稿成熟才交审稿</span></h2>
+{% set live = threads|selectattr('status', 'in', ['active', 'queued'])|list %}
+{% if live %}<div class="plist">{% for t in live %}
+<article class="pcard" id="{{ t.id }}">
+  <div class="ph"><div><span class="pt">{{ t.title }}</span>
+    <div class="po"><span class="badge {{ 'v' if t.source == 'mine' else ('run' if t.source == 'repro' else '') }}">{{ tsources[t.source] }}</span>
+    <span class="badge {{ 'ok' if t.status == 'active' else 'muted' }}">{{ '推进中' if t.status == 'active' else '排队' }}</span>
+    <span class="small muted">{{ (t.steps or [])|length }} 步 · 审稿 {{ (t.reviews or [])|rejectattr('from_seed')|list|length }} 次 · 开始于 {{ (t.created_at or '')[:10] }}</span></div></div></div>
+  <p class="pl small"><b>问题</b>：{{ t.question }}</p>
+  {% if t.idea_draft %}<p class="small"><b>当前草稿</b>：{{ t.idea_draft.title }}<span class="muted"> — {{ (t.idea_draft.summary or '')|truncate(160) }}</span></p>{% endif %}
+  {% if t.reviews %}{% set r = t.reviews[-1] %}<p class="small"><b>{{ '上次（来自以往候选）' if r.from_seed else '最近' }}审稿</b>：均分 {{ r.mean }}{% if r.scores %}（重要性 {{ r.scores.significance }} · 新颖性 {{ r.scores.novelty }} · 深度 {{ r.scores.depth }} · 可行性 {{ r.scores.feasibility }}）{% endif %}
+    <span class="muted">{{ (r.summary or '')|truncate(160) }}</span></p>{% endif %}
+  {% if t.next_steps %}<p class="small"><b>下一步</b>：{% for n in t.next_steps %}{{ n }}{{ '；' if not loop.last }}{% endfor %}</p>{% endif %}
+  {% if t.steps %}<details><summary class="small">研究记录（{{ t.steps|length }} 步）</summary>
+    {% for s_ in t.steps|reverse %}<div class="small" style="margin:8px 0"><span class="mono muted">{{ s_.day }}</span> {{ s_.did }}
+      {% for f in s_.findings or [] %}<div style="margin-left:14px">· {{ f.text|ids_named }}{% if f.refs %} <span class="muted">（{{ f.refs|join('；')|truncate(120) }}）</span>{% endif %}</div>{% endfor %}</div>{% endfor %}
+  </details>{% endif %}
+</article>{% endfor %}</div>
+{% else %}<div class="empty"><p>还没有研究线。下一次每日流程会自动开始：复现与 bad case 一条、以往接近通过的候选若干条；你自己的研究问题告诉 agent（wb thread add "问题" --mine）会优先推进。</p></div>{% endif %}
+{% set old_threads = threads|rejectattr('status', 'in', ['active', 'queued'])|list %}
+{% if old_threads %}<details style="margin-top:10px"><summary class="small">已结束的研究线（{{ old_threads|length }}）</summary>
+  {% for t in old_threads %}<div class="small" style="margin:6px 0" id="{{ t.id }}"><b>{{ t.title }}</b> · {{ {'done':'已成为 IDEA','parked':'搁置','dropped':'放弃'}.get(t.status, t.status) }}{% if t.status_reason %}：{{ t.status_reason }}{% endif %}{% if t.idea_id %} → <a href="/idea/{{ t.idea_id }}">{{ t.idea_id }}</a>{% endif %}</div>{% endfor %}
+</details>{% endif %}
+
+<h2>通过审稿的 IDEA</h2>
 {% if ideas %}
 <div class="plist">
 {% for i in ideas %}
@@ -25,7 +50,7 @@
 {% endif %}
 
 {% if days %}
-<h2>构思记录 <span class="count">每天的候选数与审稿结果</span></h2>
+<h2>广撒网构思记录 <span class="count">每次的候选数与审稿结果（现在每周一次）</span></h2>
 <div class="box"><table><thead><tr><th>日期</th><th class="num">候选</th><th class="num">通过</th><th class="num">一票否决</th><th class="num">没评成（额度）</th></tr></thead><tbody>
 {% for d in days %}<tr><td class="mono">{{ d.day }}</td><td class="num">{{ d.total }}</td><td class="num">{{ d.passed }}</td><td class="num">{{ d.veto }}</td><td class="num">{{ d.error }}</td></tr>{% endfor %}
 </tbody></table></div>

@@ -107,8 +107,10 @@ def register(app, render):
             d["error"] += i.get("verdict") == "error"
         near = sorted([r for r in rejected if not r.get("veto") and r.get("verdict") != "error" and (r.get("score") or 0) >= 6],
                       key=lambda r: -(r.get("score") or 0))
+        from workbench.papers import threads
         return render(request, "ideas.html", ideas=its, problems=probs, days=sorted(by_day.values(), key=lambda d: d["day"], reverse=True)[:14],
-                      near=near, n_rejected=len(rejected))
+                      near=near, n_rejected=len(rejected), threads=threads.all_threads(), tsources=threads.SOURCES,
+                      tcfg=threads.cfg())
 
     @app.get("/idea/{iid}", response_class=HTMLResponse)
     def idea_page(request: Request, iid: str):
