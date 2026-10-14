@@ -381,6 +381,47 @@ def cmd_topvenue(a):
     return None
 
 
+def cmd_thread(a):
+    """wb thread ls | show <线> | add "问题" [--mine|--repro|--open] [--path 路径] | park <线> --reason | resume <线> | drop <线> --reason"""
+    from . import threads
+
+    if a.action == "ls":
+        ts = threads.all_threads()
+        if a.json:
+            return out_json(ts)
+        for t in ts:
+            last = (t.get("steps") or [{}])[-1]
+            print(f"{t['id']}  [{t['status']}] {threads.SOURCES.get(t['source'])}  {t['title']}  步数 {len(t.get('steps') or [])}  审稿 {len(t.get('reviews') or [])}")
+            if last.get("did"):
+                print(f"      最近：{last['did']}")
+        return None
+    if a.action == "add":
+        if not a.ids:
+            raise SystemExit('用法：wb thread add "研究问题" --mine [--path /本人/工作区/或结果目录]')
+        src = "repro" if a.repro else ("open" if a.open else "mine")
+        t = threads.add(" ".join(a.ids), src, {"paths": a.path or []})
+        print(f"已加入研究线 {t['id']}（{threads.SOURCES[src]}），排队中；下一次每日流程会开始推进（同时最多 {threads.cfg()['max_active']} 条，本人的问题优先）")
+        return None
+    if not a.ids:
+        raise SystemExit("要指定研究线 id（wb thread ls 看）")
+    tid = a.ids[0]
+    if a.action == "show":
+        t = threads.load(tid)
+        if not t:
+            raise SystemExit(f"没有研究线 {tid}")
+        return out_json(t)
+    if a.action == "park":
+        threads.set_status(tid, "parked", a.reason)
+    elif a.action == "resume":
+        threads.set_status(tid, "queued", a.reason)
+    elif a.action == "drop":
+        if not a.reason:
+            raise SystemExit("drop 要写原因（--reason，用本人原话）")
+        threads.set_status(tid, "dropped", a.reason)
+    print(f"{tid}：{a.action}")
+    return None
+
+
 def cmd_report(a):
     from . import reports
 
@@ -438,6 +479,14 @@ def register(add):
     p = add("results", cmd_results, "跨论文结果表：不给参数列数据集；<数据集> 看报告；refresh 归类 + 补评测规模 / 方法名核对 + 核实代码 + 重建索引")
     p.add_argument("task", nargs="*")
     p.add_argument("--limit", type=int, default=0)
+    p = add("thread", cmd_thread, "研究线：ls / show / add \"问题\" [--mine|--repro|--open] / park / resume / drop")
+    p.add_argument("action", choices=["ls", "show", "add", "park", "resume", "drop"])
+    p.add_argument("ids", nargs="*")
+    p.add_argument("--mine", action="store_true")
+    p.add_argument("--repro", action="store_true")
+    p.add_argument("--open", action="store_true")
+    p.add_argument("--path", action="append", help="add：相关的工作区 / 结果目录（可多个）")
+    p.add_argument("--reason")
     p = add("topvenue", cmd_topvenue, "顶会顶刊必读：run（检索 + 判定 + 录用信息 + 清单）/ ls [--worth]")
     p.add_argument("action", choices=["run", "ls"])
     p.add_argument("--worth", action="store_true", help="ls：看值得读（默认看必读）")

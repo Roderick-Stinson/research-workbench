@@ -248,17 +248,7 @@ def run(day: str, log=print, n: int | None = None) -> dict:
         rv = reviews.get(i) or {"verdict": "error"}
         iid = _id("I", c.get("title", str(i)))
         if rv.get("verdict") == "pass":
-            d = ideas_dir() / iid
-            d.mkdir(parents=True, exist_ok=True)
-            write_json(d / "candidate.json", c)
-            write_json(d / "review.json", rv)
-            pid = _ensure_problem(c, d, log)
-            idea = {"id": iid, "title": c.get("title"), "summary": c.get("summary"), "problem_id": pid,
-                    "status": "noted", "informed": True, "created_at": now_iso(), "day": day,
-                    "score": rv.get("mean"), "history": [{"ts": now_iso(), "event": "created", "by": "ideation"}]}
-            write_json(d / "idea.json", idea)
-            _write_idea_doc(d, pid, log)
-            passed.append({"id": iid, "title": c.get("title"), "score": rv.get("mean")})
+            passed.append(promote(c, rv, day, log))
         else:
             d = ideas_dir() / ".hidden" / iid
             d.mkdir(parents=True, exist_ok=True)
@@ -272,6 +262,22 @@ def run(day: str, log=print, n: int | None = None) -> dict:
             hidden.append(iid)
     log(f"评审通过 {len(passed)} 个，未通过 {len(hidden)} 个")
     return {"candidates": len(cands), "passed": passed, "hidden": len(hidden), "revised": len(near)}
+
+
+def promote(c: dict, rv: dict, day: str, log=print, thread: str | None = None) -> dict:
+    """通过评审的候选 → 正式 IDEA（写问题文档、IDEA 文档，告知本人）。"""
+    iid = _id("I", c.get("title", "idea"))
+    d = ideas_dir() / iid
+    d.mkdir(parents=True, exist_ok=True)
+    write_json(d / "candidate.json", c)
+    write_json(d / "review.json", rv)
+    pid = _ensure_problem(c, d, log)
+    idea = {"id": iid, "title": c.get("title"), "summary": c.get("summary"), "problem_id": pid,
+            "status": "noted", "informed": True, "created_at": now_iso(), "day": day, "thread": thread,
+            "score": rv.get("mean"), "history": [{"ts": now_iso(), "event": "created", "by": "thread" if thread else "ideation"}]}
+    write_json(d / "idea.json", idea)
+    _write_idea_doc(d, pid, log)
+    return {"id": iid, "title": c.get("title"), "score": rv.get("mean")}
 
 
 def _ensure_problem(c: dict, idea_dir, log) -> str:

@@ -284,11 +284,19 @@ def field_map(day: str, iss: dict, log) -> dict:
 
 
 def ideation(day: str, iss: dict, log) -> dict:
-    from . import ideate
+    """构思（ADR-0043）：每天推进研究线（少而深）；广撒网的构思每周一次，接近通过的进研究线的候选。"""
+    from . import ideate, threads
 
-    res = ideate.run(day, log=log)
-    iss["ideas"] = (iss.get("ideas") or []) + (res.get("passed") or [])
-    return dict({k: v for k, v in res.items() if k != "passed"}, passed=len(res.get("passed") or []))
+    out = {}
+    tr = threads.advance(day, log=log)
+    iss["thread_events"] = (iss.get("thread_events") or []) + tr["events"]
+    iss["ideas"] = (iss.get("ideas") or []) + tr["passed"]
+    out["threads"] = {"events": len(tr["events"]), "passed": len(tr["passed"])}
+    if threads.scout_due(day):
+        res = ideate.run(day, log=log)
+        iss["ideas"] = iss["ideas"] + (res.get("passed") or [])
+        out["scout"] = dict({k: v for k, v in res.items() if k != "passed"}, passed=len(res.get("passed") or []))
+    return out
 
 
 def periodic_reports(day: str, iss: dict, log) -> dict:
@@ -441,6 +449,11 @@ def render_telegram(iss: dict, update: bool = False) -> str:
         lines.append(f"<b>💡 通过评审的 IDEA {len(iss['ideas'])} 个</b>")
         for it in iss["ideas"]:
             lines.append(f"• <a href=\"{e(url)}/idea/{e(it['id'])}\">{e(it.get('title'))}</a>（均分 {it.get('score')}）")
+    if iss.get("thread_events"):
+        icon = {"started": "🧭", "reviewed": "📝", "passed": "✅", "parked": "⏸"}
+        lines.append("<b>🔬 研究线进展</b>\n" + "\n".join(
+            f"{icon.get(ev['kind'], '•')} <a href=\"{e(url)}/ideas#{e(ev['thread'])}\">{e(ev['title'])}</a>：{e(ev['text'])}"
+            for ev in iss["thread_events"]))
     if iss.get("repos"):
         lines.append("新仓库：" + "，".join(f"<a href=\"{e(r['url'])}\">{e(r['name'])}</a>⭐{r['stars']}"
                                          for r in iss["repos"][:5]))
