@@ -77,6 +77,26 @@ def _experiments_digest() -> dict:
     }
 
 
+def past_reviews(limit: int = 40) -> list:
+    """以前没通过的 IDEA 与审稿意见（最近的在前）：撞车的已有工作、证据错在哪、主要弱点。构思时据此避坑。"""
+    out = []
+    for i in sorted(all_ideas(include_hidden=True), key=lambda x: x.get("created_at") or "", reverse=True):
+        if i.get("informed"):
+            continue
+        d = ideas_dir() / ".hidden" / i["id"]
+        rv = read_json(d / "review.json") or {}
+        if not rv or rv.get("verdict") == "error":
+            continue
+        closest = [c.get("title") for q in rv.get("novelty_search") or [] for c in (q.get("closest") or [])][:6]
+        bad_ev = [e.get("note") or e.get("evidence") for e in rv.get("evidence_check") or [] if e.get("verified") is False][:3]
+        out.append({"title": i.get("title"), "mean": rv.get("mean"), "scores": rv.get("scores"),
+                    "novelty_veto": rv.get("novelty_veto"), "collided_with": closest, "problem_veto": rv.get("problem_veto"),
+                    "evidence_errors": bad_ev, "weaknesses": (rv.get("weaknesses") or [])[:5], "summary": rv.get("summary")})
+        if len(out) >= limit:
+            break
+    return out
+
+
 def _materials(w):
     lib = fieldmap._library_digest()
     (w / "library.json").write_text(json.dumps(lib, ensure_ascii=False))
@@ -86,6 +106,7 @@ def _materials(w):
              "informed": i.get("informed"), "summary": i.get("summary")} for i in all_ideas(include_hidden=True)]
     (w / "previous_ideas.json").write_text(json.dumps(prev, ensure_ascii=False))
     (w / "experiments.json").write_text(json.dumps(_experiments_digest(), ensure_ascii=False, default=str))
+    (w / "past_reviews.json").write_text(json.dumps(past_reviews(), ensure_ascii=False))
     (w / "field.json").write_text(json.dumps(fieldmod.field(), ensure_ascii=False))
     return len(lib)
 
@@ -97,6 +118,7 @@ PROPOSE_PROMPT = """你是「{name}」方向的研究者，为本人每天构思
 - map.json：领域地图（每类"没考虑到什么"是问题的天然入口）
 - problems.json：已有的问题；previous_ideas.json：以前想过的 IDEA（包括没通过评审的）——**不要重复**
 - experiments.json：本人的论文项目、claim、配置组均值方差、最近的 Run（outputs 里是逐样本结果，可做 bad case 分析）
+- past_reviews.json：以前没通过的 IDEA 和独立审稿意见（撞车的已有工作、证据错在哪、主要弱点）——**先读它，别再犯同样的错**
 - field.json：方向定义
 
 任务：想 {n} 个**彼此不同**的 IDEA。每个 IDEA 必须针对一个具体的问题：
@@ -104,6 +126,13 @@ PROPOSE_PROMPT = """你是「{name}」方向的研究者，为本人每天构思
 - **证据必须真实可核对**：论文证据写 id + 英文原句 + 表 / 节号 + 数字（去 fulltext.txt 里找原句）；
   bad case 写 Run ID + 文件路径 + sample_id + 原文片段。不可以猜、不可以编。
 - 已有问题可以复用（写 existing_problem_id）。
+
+审稿标准是 NeurIPS / ICLR（新颖性、问题真实性一票否决，四项均分 ≥ 7 才算通过）。以往被拒的主要原因和对应要求：
+1. **撞车**：提交前在 library.json 和全文里找最接近的 ≥ 3 篇工作（尤其 past_reviews.json 里点名撞过的），写清楚核心机制上的本质区别；
+   只是把已有部件组合起来、或换个领域包装的，不要提交。
+2. **深度不够**：方法要定义清楚数学对象、优化目标 / 损失、训练或搜索过程，以及为什么能解决问题（最好有一个可证明或可检验的性质），不要只写模块名。
+3. **证据出错**：每条论文证据的原句、表 / 节 / 公式编号和数字都要在 fulltext.txt 里逐字核对过；对不上的证据宁可不用。
+4. **不可行**：实验要在 6 张 GPU（4090 / L40S）+ 有限 API 预算、2–3 个月内做完；先写最小但有说服力的实验，不要铺太大。
 
 输出写到 ./candidates.json：
 {{"candidates": [{{
@@ -116,6 +145,13 @@ PROPOSE_PROMPT = """你是「{name}」方向的研究者，为本人每天构思
 }}]}}
 完成后只回复 DONE 或 FAILED: 原因。
 """
+
+REVISE_PROMPT = """你是这个 IDEA 的作者。./candidate.json 是你的 IDEA，./review.json 是独立审稿人的意见（没有一票否决，但均分没到 7）。
+按审稿意见修改 IDEA，写到 ./revised.json（结构和 candidate.json 相同），重点是：
+- 逐条回应 weaknesses 和 suggestions：补上缺的形式化定义、优化目标、关键机制；说清楚和审稿人点名的最接近工作的本质区别；
+- 实验收缩到预算内（6 张 GPU + 有限 API、2–3 个月），保留最能说明问题的部分；
+- 问题与证据保持不变，除非你在 {home}/papers/<id>/fulltext.txt 里逐字核对过新的证据；不能编。
+另外写 ./response.json：{{"changes": ["针对哪条意见改了什么"]}}。论文库在 ./library.json。完成后只回复 DONE 或 FAILED: 原因。"""
 
 REVIEW_PROMPT = """按照 skill {skill}/SKILL.md 独立评审当前目录的 candidate.json（论文库在 ./library.json）。
 你不是这个 IDEA 的作者。把结果写到 ./review.json。完成后只回复 DONE 或 FAILED: 原因。"""
@@ -169,6 +205,35 @@ def run(day: str, log=print, n: int | None = None) -> dict:
                 reviews[futs[fu]] = fu.result()
             except Exception as e:  # noqa: BLE001
                 reviews[futs[fu]] = {"verdict": "error", "error": str(e)[:300]}
+    # 接近通过的（没有一票否决、均分 ≥ 6）：作者按审稿意见改一轮，换一个审稿人重新评（ADR-0042）
+    near = [i for i, rv in reviews.items() if rv.get("verdict") == "reject" and not rv.get("novelty_veto")
+            and not rv.get("problem_veto") and (rv.get("mean") or 0) >= 6]
+    for i in near:
+        wr = w / f"revise-{i}"
+        wr.mkdir(parents=True, exist_ok=True)
+        write_json(wr / "candidate.json", cands[i])
+        write_json(wr / "review.json", reviews[i])
+        shutil.copy2(w / "library.json", wr / "library.json")
+        try:
+            rr = codex.run(f"revise:{day}:{i}", wr, REVISE_PROMPT.format(home=config.home()), network=False)
+        except Exception as e:  # noqa: BLE001
+            log(f"修改 IDEA {i} 没做成：{e}")
+            continue
+        rev = read_json(wr / "revised.json")
+        if not rr["ok"] or not rev:
+            log(f"修改 IDEA {i} 没有产出：{rr.get('error')}")
+            continue
+        rev["revision"] = {"first_review": {k: reviews[i].get(k) for k in ("mean", "scores", "summary", "weaknesses")},
+                           "changes": (read_json(wr / "response.json") or {}).get("changes")}
+        try:
+            rv2 = _review(rev, w / f"review-{i}-r2", w / "library.json")
+        except Exception as e:  # noqa: BLE001
+            log(f"修改后的 IDEA {i} 重评没做成：{e}")
+            continue
+        if rv2.get("verdict") != "error":
+            cands[i] = rev
+            reviews[i] = dict(rv2, revised=True)
+            log(f"IDEA {i} 修改后重评：{reviews[i]['verdict']}（均分 {rv2.get('mean')}，原 {rev['revision']['first_review']['mean']}）")
     # 口味过滤（ADR-0039）：评审通过但不合本人口味的不告知，和没通过评审的放在一起、写明原因
     from . import taste
 
@@ -201,10 +266,12 @@ def run(day: str, log=print, n: int | None = None) -> dict:
             write_json(d / "review.json", rv)
             write_json(d / "idea.json", {"id": iid, "title": c.get("title"), "summary": c.get("summary"),
                                          "status": "rejected", "informed": False, "created_at": now_iso(), "day": day,
-                                         "score": rv.get("mean"), "verdict": rv.get("verdict"), "taste": rv.get("taste")})
+                                         "score": rv.get("mean"), "verdict": rv.get("verdict"), "taste": rv.get("taste"),
+                                         "revised": bool(rv.get("revised")), "review_summary": rv.get("summary"),
+                                         "veto": "新颖性" if rv.get("novelty_veto") else ("问题真实性" if rv.get("problem_veto") else None)})
             hidden.append(iid)
     log(f"评审通过 {len(passed)} 个，未通过 {len(hidden)} 个")
-    return {"candidates": len(cands), "passed": passed, "hidden": len(hidden)}
+    return {"candidates": len(cands), "passed": passed, "hidden": len(hidden), "revised": len(near)}
 
 
 def _ensure_problem(c: dict, idea_dir, log) -> str:

@@ -89,7 +89,26 @@ def register(app, render):
     def ideas_page(request: Request):
         its = ideate.all_ideas()
         probs = {p["id"]: p for p in ideate.all_problems()}
-        return render(request, "ideas.html", ideas=its, problems=probs)
+        # 构思记录：每天想了几个、通过几个；没通过的里最接近的（不推送，只在这里折叠显示）
+        rejected = []
+        for i in ideate.all_ideas(include_hidden=True):
+            if i.get("informed"):
+                continue
+            rv = read_json(ideate.ideas_dir() / ".hidden" / i["id"] / "review.json") or {}
+            veto = i.get("veto") or ("新颖性" if rv.get("novelty_veto") else ("问题真实性" if rv.get("problem_veto") else None))
+            rejected.append(dict(i, veto=veto, review_summary=i.get("review_summary") or rv.get("summary"),
+                                 scores=rv.get("scores"), error=rv.get("error")))
+        by_day = {}
+        for i in rejected + [dict(x, passed=True) for x in its]:
+            d = by_day.setdefault(i.get("day") or "?", {"day": i.get("day") or "?", "total": 0, "passed": 0, "veto": 0, "error": 0})
+            d["total"] += 1
+            d["passed"] += bool(i.get("passed"))
+            d["veto"] += bool(i.get("veto"))
+            d["error"] += i.get("verdict") == "error"
+        near = sorted([r for r in rejected if not r.get("veto") and r.get("verdict") != "error" and (r.get("score") or 0) >= 6],
+                      key=lambda r: -(r.get("score") or 0))
+        return render(request, "ideas.html", ideas=its, problems=probs, days=sorted(by_day.values(), key=lambda d: d["day"], reverse=True)[:14],
+                      near=near, n_rejected=len(rejected))
 
     @app.get("/idea/{iid}", response_class=HTMLResponse)
     def idea_page(request: Request, iid: str):
