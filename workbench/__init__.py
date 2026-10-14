@@ -3,7 +3,7 @@
 设计见 CONTEXT.md 与 docs/adr/。核心部分只用标准库（Python >= 3.9）。
 """
 
-__version__ = "0.9.0"
+__version__ = "0.10.0"
 
 
 def log(step=None, **metrics):
