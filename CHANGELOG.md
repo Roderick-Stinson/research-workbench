@@ -1,11 +1,13 @@
 # Changelog
 
-## 未发布
+## v0.7.0 — 2026-10-14
 
 ### 修复
 - 必读清单：会议年份只用录用信息里写明的（不拿 arXiv 年份代替，之前 AFlow 显示成 ICLR 2024）；
   "本文方法"以方法名核对里的 proposed 为准，没核对过时 "AutoGen (+AgentPrune)"、"MetaGPT (MASFactory)" 这类写法不算本文方法；
   只靠引用数的必读门槛提高（≥ 100 / 一年内 ≥ 40）并过口味过滤。
+- 必读：本文方法也从方法名核对（前缀匹配，AgentPrune-C 算 AgentPrune）和标题短名（"MetaGPT: …"）识别，之前漏了 AgentPrune、MetaGPT。
+- HF Daily 栏不推评价 ≤ 2、或重新精选时被换掉的论文。
 - 口味过滤分批调用（每次 40 项），避免网关超时。
 - 结果表：模型把字段写成数字时不再出错。
 
