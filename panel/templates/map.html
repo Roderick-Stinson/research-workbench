@@ -1,25 +1,93 @@
 {% extends "base.html" %}
 {% block title %}领域地图 · 实验工作台{% endblock %}
+{% macro paper(pid, short=False) -%}{% set t = titles.get(pid) %}{% set x = lm.get(pid) %}<a href="/paper/{{ pid }}" title="{{ t.orig if t else pid }}">{{ ((x.title if x and short else (t.title if t else pid)) or pid)|truncate(48 if short else 70) }}</a>{%- endmacro %}
+{% macro ids_text(text) -%}{{ text|ids_named }}{%- endmacro %}
 {% block body %}
 <h1>领域地图 · {{ field.name }}</h1>
-{% if m %}
-<p class="sub">v{{ m.version }} · {{ m.n_papers }} 篇 · {{ fmt_time(m.created_at) }} · {{ '重组' if m.kind == 'rebuild' else '每日归类' }}
- {% if versions|length > 1 %}· 版本：{% for v in versions|reverse %}{% if loop.index <= 12 %}<a class="mono small" href="/map?v={{ v.version }}">v{{ v.version }}</a> {% endif %}{% endfor %}{% endif %}</p>
-{% if m.overview %}<p class="purpose">{{ m.overview|ids }}</p>{% endif %}
-{% if m.changes %}<div class="alert">相对上一版：{{ m.changes|ids }}</div>{% endif %}
-{% for c in m.primary.categories %}
-<h2>{{ c.name }} <span class="count">{{ (c.members or [])|length }} 篇</span></h2>
-<div class="box" style="padding:14px 18px">
-  <p style="margin-top:0"><b>核心思路</b>：{{ c.idea|ids }}</p>
-  {% if c.prose %}<p>{{ c.prose|ids }}</p>{% endif %}
-  <p class="warnline" style="font-size:14px"><b>这一类没考虑到</b>：{{ c.missing|ids }}</p>
-  {% if c.representative %}<div class="small"><b>代表工作</b>：{% for p in c.representative %}{% set t = titles.get(p) %}<a href="/paper/{{ p }}">{{ (t.title if t else p)|truncate(60) }}</a>{% if not loop.last %}；{% endif %}{% endfor %}</div>{% endif %}
-  <details style="margin-top:8px"><summary class="small">全部 {{ (c.members or [])|length }} 篇</summary>
-    <div class="small" style="columns:2 360px;margin-top:6px">{% for p in c.members or [] %}{% set t = titles.get(p) %}<div><a href="/paper/{{ p }}">{{ (t.title if t else p)|truncate(70) }}</a> <span class="muted">{{ (t.published or '')[:7] if t }}</span></div>{% endfor %}</div>
-  </details>
+<p class="sub">{% if ov.built_at %}{{ ov.stats.n_papers }} 篇属于方向的论文 · 更新于 {{ fmt_time(ov.built_at) }}{% endif %}
+ · <a href="#history">发展史</a> · <a href="#trends">热点变化</a> · <a href="#evals">评测与基线</a> · <a href="#insights">空白与其它发现</a> · <a href="#categories">分类</a></p>
+{% if ov.overview %}<p class="purpose">{{ ov.overview|ids_named }}</p>{% endif %}
+{% if not ov.built_at %}<div class="empty"><p>新版地图还没生成：每天的流程会生成（第一次要先给全部论文打研究主题）。</p></div>{% endif %}
+
+{# ---------------- 发展史 ---------------- #}
+{% if ov.eras %}
+<h2 id="history">发展史 <span class="count">按时间；每个阶段的主线、里程碑论文，以及它们对比过哪些更早的里程碑</span></h2>
+<div class="timeline">
+{% for e in ov.eras %}
+<div class="era">
+  <div class="era-h"><span class="era-p">{{ e.period }}</span> <b>{{ e.title }}</b></div>
+  <p class="era-s">{{ e.shift|ids_named }}</p>
+  <div class="lms">{% for pid in e.landmarks %}{% set x = lm.get(pid) %}
+    <div class="lm"><span class="mono small muted">{{ x.date if x else '' }}</span>{% if x and x.venue %} <span class="badge v">{{ x.venue }}</span>{% endif %}
+      {{ paper(pid) }}
+      {% if (e.notes or {}).get(pid) %}<div class="small">{{ e.notes[pid]|ids_named }}</div>{% endif %}
+      {% if x and x.compares_with %}<div class="small muted">对比了：{% for q in x.compares_with %}{{ paper(q, True) }}{{ '、' if not loop.last }}{% endfor %}</div>{% endif %}
+    </div>{% endfor %}</div>
 </div>
 {% endfor %}
-{% else %}
-<div class="empty"><p>还没有领域地图。每日流程第一次运行时会用 codex 读完整个论文库生成第一版，之后每周最多重组一次。</p></div>
+</div>
+{% endif %}
+
+{# ---------------- 热点变化 ---------------- #}
+{% if ov.stats %}{% set st = ov.stats %}
+<h2 id="trends">研究热点的变化 <span class="count">占比 = 该主题论文数 / 同期属于方向的论文数</span></h2>
+<p class="small muted">近半年（{{ st.recent_from }} 起）对比再往前半年。时间轴：{% for p in st.periods %}{{ p.period }}{{ '（' ~ p.n ~ ' 篇，样本少）' if p.low else '' }}{{ ' · ' if not loop.last }}{% endfor %}。
+论文库对近 12 个月是全量收录，更早只有顶会顶刊论文，所以早期的占比只能作参考（空心点）。</p>
+{% set notes = {} %}{% for n in ov.trend_notes or [] %}{% set _ = notes.update({n.theme: n.note}) %}{% endfor %}
+<div class="box"><table class="trend">
+<thead><tr><th>研究主题</th><th class="num">近半年占比</th><th class="num">变化</th><th>走势</th><th>解读</th></tr></thead>
+<tbody>{% for t in st.themes if t.id != 'other' %}
+<tr><td><b>{{ t.name }}</b><div class="small muted">近半年 {{ t.recent }} 篇</div></td>
+<td class="num">{{ t.share_recent }}%</td>
+<td class="num">{% if t.delta >= 1.5 %}<span class="up">▲ {{ t.delta }}</span>{% elif t.delta <= -1.5 %}<span class="down">▼ {{ -t.delta }}</span>{% else %}<span class="muted">{{ t.delta }}</span>{% endif %}</td>
+<td>{{ spark(t.series) }}</td>
+<td class="small">{{ (notes.get(t.id) or '')|ids_named }}</td></tr>{% endfor %}
+</tbody></table></div>
+<div class="grid2" style="margin-top:14px">
+  <div class="box" style="padding:12px 14px"><b class="small">搜索 / 生成方式的占比</b>
+  <table class="trend mini">{% for s in st.search[:7] %}<tr><td class="small">{{ s.name }}</td><td>{{ spark(s.series, 120, 26) }}</td><td class="num small">{{ (s.series[-1].share or s.series[-2].share) if s.series else '' }}%</td></tr>{% endfor %}</table></div>
+  <div class="box" style="padding:12px 14px"><b class="small">粒度的占比</b>
+  <table class="trend mini">{% for s in st.granularity[:3] %}<tr><td class="small">{{ s.name }}</td><td>{{ spark(s.series, 120, 26) }}</td><td class="num small">{{ (s.series[-1].share or s.series[-2].share) if s.series else '' }}%</td></tr>{% endfor %}</table></div>
+</div>
+
+{# ---------------- 评测与基线 ---------------- #}
+<h2 id="evals">评测与基线 <span class="count">投稿时要比什么、在哪儿比</span></h2>
+<div class="grid2">
+  <div class="box" style="padding:12px 14px"><b>现在要比的 baseline</b> <span class="small muted">近 12 个月 {{ st.n_recent_method }} 篇方法论文里，和这些领域常用方法比过的篇数</span>
+  <div class="bars">{% set mx = (st.must_compare[0][1] if st.must_compare else 1) %}{% for name, n in st.must_compare %}
+    <div class="bar"><span class="bl">{{ name }}</span><span class="bb"><i style="width:{{ (100 * n / mx)|round }}%"></i></span><span class="bn">{{ n }}</span></div>{% endfor %}</div></div>
+  <div class="box" style="padding:12px 14px"><b>benchmark 饱和度</b> <span class="small muted">每半年各论文"本文方法"最高分的第 90 百分位（不含子集评测；括号里是论文数）</span>
+  <table class="trend mini">{% for s in st.saturation %}<tr><td class="small">{{ s.dataset }} <span class="muted">{{ s.metric }}</span></td>
+    <td class="small">{% for p in s.series[-4:] %}<span class="muted">{{ p.period }}</span> {{ p.value }}<span class="muted">（{{ p.n }}）</span>{{ ' · ' if not loop.last }}{% endfor %}</td>
+    <td>{% if s.saturated %}<span class="badge warn">接近饱和</span>{% elif s.best is none %}<span class="small muted">样本少</span>{% endif %}</td></tr>{% endfor %}</table></div>
+</div>
+<div class="box scroll-x" style="margin-top:14px;padding:12px 14px"><b>每年最常用的 benchmark 与 baseline</b>
+<table class="trend mini"><thead><tr><th>年份</th><th>benchmark（篇数）</th><th>baseline（篇数）</th></tr></thead><tbody>
+{% for y, ds in st.benchmarks_by_year.items() %}<tr><td class="mono">{{ y }}</td>
+<td class="small">{% for d, n in ds[:6] %}{{ d }} <span class="muted">{{ n }}</span>{{ '、' if not loop.last }}{% endfor %}</td>
+<td class="small">{% for d, n in (st.baselines_by_year.get(y) or [])[:6] %}{{ d }} <span class="muted">{{ n }}</span>{{ '、' if not loop.last }}{% endfor %}</td></tr>{% endfor %}
+</tbody></table></div>
+
+{# ---------------- 空白与其它发现 ---------------- #}
+<h2 id="insights">空白与其它发现</h2>
+{% if ov.insights %}<div class="insights">{% for i in ov.insights %}<div class="box ins"><b>{{ i.title }}</b><p class="small">{{ i.detail|ids_named }}</p>
+  {% if i.evidence %}<div class="small muted">依据：{% for ev in i.evidence %}{% if ev is string and (ev.startswith('arxiv-') or ev.startswith('doi-') or ev.startswith('t-')) %}{{ paper(ev, True) }}{% else %}{{ ev }}{% endif %}{{ '；' if not loop.last }}{% endfor %}</div>{% endif %}</div>{% endfor %}</div>{% endif %}
+{% set ws = st.whitespace %}
+<div class="box scroll-x" style="margin-top:14px;padding:12px 14px"><b>研究主题 × 搜索方式</b> <span class="small muted">近 12 个月的篇数（按每篇的主要主题）；空白格 = 还没人这么做</span>
+<table class="ws"><thead><tr><th></th>{% for v in ws.search %}<th class="small">{{ v }}</th>{% endfor %}</tr></thead><tbody>
+{% for t in ws.themes %}{% set row = ws.counts.get(t.id) or {} %}<tr><td class="small">{{ t.name }}</td>
+{% for v in ws.search %}{% set n = row.get(v) or 0 %}<td class="num small c{{ 0 if n == 0 else (1 if n < 5 else (2 if n < 20 else 3)) }}">{{ n or '' }}</td>{% endfor %}</tr>{% endfor %}
+</tbody></table></div>
+{% endif %}
+
+{# ---------------- 分类 ---------------- #}
+{% if m %}
+<h2 id="categories">分类 <span class="count">v{{ m.version }} · {{ fmt_time(m.created_at) }}</span></h2>
+<div class="cats">{% for c in m.primary.categories %}
+<div class="box cat"><div class="cat-h"><b>{{ c.name }}</b> <span class="small muted">{{ (c.members or [])|length }} 篇</span></div>
+  <p class="small"><b>核心思路</b>：{{ c.idea|ids_named }}</p>
+  <p class="small warnline"><b>没考虑到</b>：{{ c.missing|ids_named }}</p>
+  {% if c.representative %}<div class="small"><b>代表工作</b>：{% for p in c.representative %}{{ paper(p) }}{{ '；' if not loop.last }}{% endfor %}</div>{% endif %}
+</div>{% endfor %}</div>
 {% endif %}
 {% endblock %}

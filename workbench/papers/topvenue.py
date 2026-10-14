@@ -182,6 +182,22 @@ def refresh_venues(log=print, max_age_days: int = 14) -> dict:
 
 # ---------------- 必读 ----------------
 
+def own_keys(rows: list, own: dict | None = None) -> dict:
+    """每篇论文自己提出的方法（m_key 集合）：结果行 ∪ 方法名核对的 proposed ∪ 标题冒号前的短名（"MetaGPT: …"）。"""
+    own = own if own is not None else results.owners(rows)
+    out = defaultdict(set)
+    for mk, o in own.items():
+        out[o["pid"]].add(mk)
+    for m in store.all_papers():
+        qr = m.get("_qr") or {}
+        for n in (qr.get("method_check") or {}).get("proposed") or []:
+            out[m["id"]].add(results.m_key(n))
+        head = (m.get("title") or "").split(":")[0].strip()
+        if ":" in (m.get("title") or "") and 0 < len(head.split()) <= 2 and len(head) <= 24:
+            out[m["id"]].add(results.m_key(head))
+    return out
+
+
 def build(log=print) -> dict:
     """生成必读 / 值得读清单，写 reports/must_read.json（面板读它）。"""
     from . import taste
@@ -189,16 +205,7 @@ def build(log=print) -> dict:
     rows = results.all_rows()
     std = rigor.standards(rows)
     own = results.owners(rows)
-    own_by_pid = defaultdict(set)
-    for mk, o in own.items():
-        own_by_pid[o["pid"]].add(mk)
-    for m in store.all_papers():  # 本文方法还可以来自方法名核对、标题冒号前的短名（"MetaGPT: …"）
-        qr = m.get("_qr") or {}
-        for n in (qr.get("method_check") or {}).get("proposed") or []:
-            own_by_pid[m["id"]].add(results.m_key(n))
-        head = (m.get("title") or "").split(":")[0].strip()
-        if ":" in (m.get("title") or "") and 0 < len(head.split()) <= 2 and len(head) <= 24:
-            own_by_pid[m["id"]].add(results.m_key(head))
+    own_by_pid = own_keys(rows, own)
     compared = defaultdict(set)
     for r in rows:
         if not r["is_proposed"]:

@@ -583,5 +583,35 @@ class TestTopVenue(unittest.TestCase):
         self.assertGreaterEqual(out["must"], 1)
 
 
+class TestMapView(unittest.TestCase):
+    def test_themes_and_overview(self):
+        from unittest import mock
+        from workbench.papers import mapview, results, store, themes, topvenue
+        os.environ["WB_LLM_PROTOCOL"] = "fake"
+        try:
+            fieldmod.init_from("mas-arch-opt")
+            for i, (t, d) in enumerate([("Topology design A", "2025-03-01"), ("Topology design B", "2026-08-01"),
+                                        ("Workflow search C", "2026-09-01"), ("Workflow search D", "2025-12-01")]):
+                pid = f"arxiv-9999.6000{i}"
+                store.save({"id": pid, "title": t, "intake": {"state": "relevant"}, "published": d, "sources": []})
+                store.save_quickread(pid, {"one_liner": t, "facets": {"search": ["强化学习"], "kind": ["方法"]}})
+            store._cache.clear()
+            themes.propose(log=lambda *a: None)
+            themes.assign(themes.pending(), kind="daily", log=lambda *a: None)
+            store._cache.clear()
+            self.assertEqual(store.load("arxiv-9999.60000")["themes"], ["topology"])
+            self.assertEqual(themes.pending(), [])
+            with mock.patch.object(topvenue, "load", return_value={"must": [{"pid": "arxiv-9999.60000", "date": "2025-03", "title": "A"}]}):
+                mapview.build(log=lambda *a: None)
+            ov = mapview.load()
+            tr = {t["id"]: t for t in ov["stats"]["themes"]}
+            self.assertIn("topology", tr)
+            self.assertTrue(any(p["share"] for p in tr["topology"]["series"]))
+            self.assertNotIn("bogus-id", ov["eras"][0]["landmarks"])                  # 叙述里编出来的 id 去掉
+            self.assertEqual(ov["landmarks"][0]["id"], "arxiv-9999.60000")
+        finally:
+            os.environ.pop("WB_LLM_PROTOCOL", None)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -263,10 +263,24 @@ def field_map(day: str, iss: dict, log) -> dict:
     n_rel = sum(1 for m in store.all_papers() if m.get("intake", {}).get("state") == "relevant")
     if n_rel < 20:
         return {"skipped": f"论文库只有 {n_rel} 篇，至少 20 篇再生成地图"}
-    if fieldmap.due_for_rebuild(day):
-        return fieldmap.rebuild(log=log)
-    new = [p for p in iss.get("candidates") or [] if (store.load(p) or {}).get("intake", {}).get("state") == "relevant"]
-    return fieldmap.assign_new(new, log=log)
+    from . import mapview, themes
+
+    weekly = fieldmap.due_for_rebuild(day)
+    if weekly:
+        out = fieldmap.rebuild(log=log)
+    else:
+        new = [p for p in iss.get("candidates") or [] if (store.load(p) or {}).get("intake", {}).get("state") == "relevant"]
+        out = fieldmap.assign_new(new, log=log)
+    # 研究主题（ADR-0041）：主题表每 30 天重新提议；新论文 / 主题表变了的论文打主题
+    th = themes.load()
+    age = (_dt.datetime.now() - _dt.datetime.fromisoformat(th["created_at"][:19])).days if th.get("created_at") else 999
+    if age >= 30:
+        themes.propose(log=log)
+    todo = themes.pending()
+    if todo:
+        themes.assign(todo[:400], kind="daily" if len(todo) <= 120 else "backfill", log=log)
+    out["overview"] = mapview.build(log=log, narrative=weekly or not mapview.load().get("eras"))
+    return out
 
 
 def ideation(day: str, iss: dict, log) -> dict:
