@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>研究工作台说明书</title>
+<style>:root{
+  --bg:#f7f6f2; --surface:#ffffff; --surface-2:#f1efe8; --text:#1f2328; --muted:#5f6670; --line:#e3e0d6;
+  --accent:#2f5d8a; --accent-soft:#e6eef7; --code-bg:#f3f1ea; --pill:#2f5d8a; --pill-text:#fff;
+  --c0:#a35a12; --c0-bg:#fbf0e3; --c1:#2f5d8a; --c1-bg:#e6eef7; --c2:#2c7a4b; --c2-bg:#e5f3ea; --c3:#7a3e8f; --c3-bg:#f3e8f7;
+  --shadow:0 1px 2px rgba(0,0,0,.04),0 2px 8px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#15171a; --surface:#1c1f23; --surface-2:#23272c; --text:#e6e6e3; --muted:#9aa1a9; --line:#2f343a;
+    --accent:#8ab4e0; --accent-soft:#1f2b38; --code-bg:#23272c; --pill:#8ab4e0; --pill-text:#10161d;
+    --c0:#e2a462; --c0-bg:#2e2418; --c1:#8ab4e0; --c1-bg:#1f2b38; --c2:#7cc79a; --c2-bg:#1b2b22; --c3:#c79ad8; --c3-bg:#2a2030;
+    --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#15171a; --surface:#1c1f23; --surface-2:#23272c; --text:#e6e6e3; --muted:#9aa1a9; --line:#2f343a;
+  --accent:#8ab4e0; --accent-soft:#1f2b38; --code-bg:#23272c; --pill:#8ab4e0; --pill-text:#10161d;
+  --c0:#e2a462; --c0-bg:#2e2418; --c1:#8ab4e0; --c1-bg:#1f2b38; --c2:#7cc79a; --c2-bg:#1b2b22; --c3:#c79ad8; --c3-bg:#2a2030;
+  --shadow:none;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:72px}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:15.5px/1.75 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Noto Sans SC","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.86em;background:var(--code-bg);
+  padding:.1em .38em;border-radius:4px;word-break:break-word}
+header.top{position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;align-items:center;gap:12px;
+  padding:12px 24px;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.brand{font-weight:650;letter-spacing:.01em}
+.meta{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:13.5px}
+.pill{background:var(--pill);color:var(--pill-text);border-radius:999px;padding:1px 9px;font-weight:600;font-size:12.5px}
+#theme{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:8px;width:32px;height:28px;cursor:pointer;font-size:14px}
+.layout{display:grid;grid-template-columns:260px minmax(0,1fr);gap:40px;max-width:1180px;margin:0 auto;padding:0 24px}
+aside{position:sticky;top:58px;align-self:start;max-height:calc(100vh - 58px);overflow:auto;padding:24px 0 40px}
+.toc ol{list-style:none;margin:0;padding:0}
+.toc li a{display:flex;gap:8px;padding:4px 10px;border-radius:6px;color:var(--muted);font-size:13.5px;line-height:1.5}
+.toc li a:hover{background:var(--surface-2);color:var(--text);text-decoration:none}
+.toc li a.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.toc .n{min-width:1.4em;text-align:right;opacity:.6;font-variant-numeric:tabular-nums}
+.toc ul.sub{list-style:none;margin:2px 0 6px 2.1em;padding:0;display:flex;flex-wrap:wrap;gap:2px 4px}
+.toc ul.sub a{padding:1px 6px;font-size:12px;font-family:ui-monospace,Menlo,monospace}
+main{min-width:0;padding:28px 0 80px;max-width:860px}
+details.mtoc{display:none}
+section{margin:0 0 56px}
+section.lead blockquote{margin:0 0 40px;font-size:16px}
+h2{font-size:24px;line-height:1.35;margin:0 0 18px;padding-bottom:10px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:12px}
+h2 .num{font-size:15px;color:var(--accent);font-variant-numeric:tabular-nums;font-weight:600;min-width:1.6em}
+h3{font-size:18px;margin:32px 0 10px}
+p{margin:0 0 14px}
+ul,ol{margin:0 0 14px;padding-left:1.4em}
+li{margin:3px 0}
+li>ul,li>ol{margin:4px 0}
+blockquote{margin:0 0 18px;padding:12px 16px;border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 8px 8px 0;color:var(--text)}
+.tbl{overflow-x:auto;margin:0 0 18px;border:1px solid var(--line);border-radius:10px;background:var(--surface);box-shadow:var(--shadow)}
+table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.6}
+th,td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid var(--line)}
+th{background:var(--surface-2);font-weight:600;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td:first-child{white-space:nowrap}
+pre.code{margin:0 0 18px;padding:14px 16px;background:var(--code-bg);border:1px solid var(--line);border-radius:10px;overflow-x:auto;
+  font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,"PingFang SC",monospace}
+pre.code code{background:none;padding:0;font-size:inherit}
+/* 版本时间线 */
+section.versions{position:relative}
+section.versions .card{position:relative;margin:0 0 22px 22px;padding:18px 20px 6px;background:var(--surface);border:1px solid var(--line);
+  border-radius:12px;box-shadow:var(--shadow)}
+section.versions .card::before{content:"";position:absolute;left:-23px;top:22px;width:11px;height:11px;border-radius:50%;
+  background:var(--accent);box-shadow:0 0 0 4px var(--bg)}
+section.versions .card::after{content:"";position:absolute;left:-18px;top:36px;bottom:-30px;width:1px;background:var(--line)}
+section.versions .card:last-of-type::after{display:none}
+section.versions .card.unreleased::before{background:var(--c0)}
+section.versions .card.pre::before{background:var(--muted)}
+.card header{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 12px;margin-bottom:12px}
+.card .tag{font:600 14px/1 ui-monospace,Menlo,monospace;color:var(--pill-text);background:var(--pill);padding:5px 9px;border-radius:6px}
+.card.unreleased .tag{background:var(--c0)}
+.card.pre .tag{background:var(--muted)}
+.card .date{color:var(--muted);font-size:13px}
+.card h3{margin:0;font-size:17px;flex-basis:100%}
+.lbl{display:inline-block;font-size:12.5px;padding:1px 8px;border-radius:5px;margin-right:6px}
+.lbl-0{color:var(--c0);background:var(--c0-bg)}
+.lbl-1{color:var(--c1);background:var(--c1-bg)}
+.lbl-2{color:var(--c2);background:var(--c2-bg)}
+.lbl-3{color:var(--c3);background:var(--c3-bg)}
+footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+@media (max-width: 900px){
+  .layout{grid-template-columns:minmax(0,1fr);padding:0 16px;gap:0}
+  aside{display:none}
+  header.top{padding:10px 16px}
+  .meta a{display:none}
+  details.mtoc{display:block;margin:0 0 24px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+  details.mtoc summary{cursor:pointer;padding:10px 14px;font-weight:600}
+  details.mtoc nav{padding:0 6px 10px}
+  main{padding-top:18px}
+  h2{font-size:21px}
+  section.versions .card{margin-left:14px;padding:14px 14px 4px}
+  section.versions .card::before{left:-19px}
+  section.versions .card::after{left:-14px}
+  td:first-child{white-space:normal}
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">研究工作台 · 使用说明书</div>
+  <div class="meta"><span class="pill">v0.11.0</span><span>2026-10-17</span>
+  <a href="https://github.com/Roderick-Stinson/research-workbench" target="_blank" rel="noopener">GitHub</a>
+  <button id="theme" aria-label="切换深浅色"></button></div>
+</header>
+<div class="layout">
+<aside><nav class="toc desk"><ol><li><a href="#s1"><span class="n">1</span>一页看懂</a></li><li><a href="#s2"><span class="n">2</span>整体结构</a></li><li><a href="#s3"><span class="n">3</span>时间表：系统每天自己在做什么</a></li><li><a href="#s4"><span class="n">4</span>实验侧：自动记录实验</a></li><li><a href="#s5"><span class="n">5</span>论文侧：每日论文流程</a></li><li><a href="#s6"><span class="n">6</span>精选是怎么挑出来的</a></li><li><a href="#s7"><span class="n">7</span>评价、口味与画像</a></li><li><a href="#s8"><span class="n">8</span>跨论文结果表</a></li><li><a href="#s9"><span class="n">9</span>顶会顶刊必读</a></li><li><a href="#s10"><span class="n">10</span>领域地图</a></li><li><a href="#s11"><span class="n">11</span>构思：研究线与 IDEA</a></li><li><a href="#s12"><span class="n">12</span>Telegram 推送</a></li><li><a href="#s13"><span class="n">13</span>面板逐页说明</a></li><li><a href="#s14"><span class="n">14</span>你怎么用：对 agent 说的话与命令</a></li><li><a href="#s15"><span class="n">15</span>模型、额度与自动补跑</a></li><li><a href="#s16"><span class="n">16</span>它读什么、不读什么（数据边界）</a></li><li><a href="#s17"><span class="n">17</span>数据存在哪里</a></li><li><a href="#s18"><span class="n">18</span>配置项</a></li><li><a href="#s19"><span class="n">19</span>维护、发版、排障</a></li><li><a href="#s20"><span class="n">20</span>已知局限</a></li><li><a href="#s21"><span class="n">21</span>版本历史：每个版本做了什么</a><ul class="sub"><li><a href="#ver-pre">v0.1.0</a></li><li><a href="#ver-v0-1-0">v0.1.0</a></li><li><a href="#ver-v0-1-1">v0.1.1</a></li><li><a href="#ver-v0-2-0">v0.2.0</a></li><li><a href="#ver-v0-3-0">v0.3.0</a></li><li><a href="#ver-v0-4-0">v0.4.0</a></li><li><a href="#ver-v0-5-0">v0.5.0</a></li><li><a href="#ver-v0-6-0">v0.6.0</a></li><li><a href="#ver-v0-7-0">v0.7.0</a></li><li><a href="#ver-v0-8-0">v0.8.0</a></li><li><a href="#ver-v0-9-0">v0.9.0</a></li><li><a href="#ver-v0-10-0">v0.10.0</a></li><li><a href="#ver-v0-11-0">v0.11.0</a></li><li><a href="#ver-unreleased">未发布</a></li></ul></li></ol></nav></aside>
+<main>
+<details class="mtoc"><summary>目录</summary><nav class="toc"><ol><li><a href="#s1"><span class="n">1</span>一页看懂</a></li><li><a href="#s2"><span class="n">2</span>整体结构</a></li><li><a href="#s3"><span class="n">3</span>时间表：系统每天自己在做什么</a></li><li><a href="#s4"><span class="n">4</span>实验侧：自动记录实验</a></li><li><a href="#s5"><span class="n">5</span>论文侧：每日论文流程</a></li><li><a href="#s6"><span class="n">6</span>精选是怎么挑出来的</a></li><li><a href="#s7"><span class="n">7</span>评价、口味与画像</a></li><li><a href="#s8"><span class="n">8</span>跨论文结果表</a></li><li><a href="#s9"><span class="n">9</span>顶会顶刊必读</a></li><li><a href="#s10"><span class="n">10</span>领域地图</a></li><li><a href="#s11"><span class="n">11</span>构思：研究线与 IDEA</a></li><li><a href="#s12"><span class="n">12</span>Telegram 推送</a></li><li><a href="#s13"><span class="n">13</span>面板逐页说明</a></li><li><a href="#s14"><span class="n">14</span>你怎么用：对 agent 说的话与命令</a></li><li><a href="#s15"><span class="n">15</span>模型、额度与自动补跑</a></li><li><a href="#s16"><span class="n">16</span>它读什么、不读什么（数据边界）</a></li><li><a href="#s17"><span class="n">17</span>数据存在哪里</a></li><li><a href="#s18"><span class="n">18</span>配置项</a></li><li><a href="#s19"><span class="n">19</span>维护、发版、排障</a></li><li><a href="#s20"><span class="n">20</span>已知局限</a></li><li><a href="#s21"><span class="n">21</span>版本历史：每个版本做了什么</a><ul class="sub"><li><a href="#ver-pre">v0.1.0</a></li><li><a href="#ver-v0-1-0">v0.1.0</a></li><li><a href="#ver-v0-1-1">v0.1.1</a></li><li><a href="#ver-v0-2-0">v0.2.0</a></li><li><a href="#ver-v0-3-0">v0.3.0</a></li><li><a href="#ver-v0-4-0">v0.4.0</a></li><li><a href="#ver-v0-5-0">v0.5.0</a></li><li><a href="#ver-v0-6-0">v0.6.0</a></li><li><a href="#ver-v0-7-0">v0.7.0</a></li><li><a href="#ver-v0-8-0">v0.8.0</a></li><li><a href="#ver-v0-9-0">v0.9.0</a></li><li><a href="#ver-v0-10-0">v0.10.0</a></li><li><a href="#ver-v0-11-0">v0.11.0</a></li><li><a href="#ver-unreleased">未发布</a></li></ul></li></ol></nav></details>
+<section class="lead" id="top">
+<blockquote>适用版本：v0.11.0（2026-10-17）。这份说明书讲清楚三件事：<strong>它每天自己在做什么</strong>、<strong>你能怎么用它</strong>、<strong>它读了什么、写了什么、存在哪里</strong>。<br>想看某个设计为什么这样定，每节末尾都标了对应的 ADR（<code>docs/adr/</code>）。术语表见 <a href="https://github.com/Roderick-Stinson/research-workbench/blob/main/CONTEXT.md" target="_blank" rel="noopener"><code>CONTEXT.md</code></a>，维护流程见 <a href="https://github.com/Roderick-Stinson/research-workbench/blob/main/MAINTAINING.md" target="_blank" rel="noopener"><code>MAINTAINING.md</code></a>。<br>本说明书有两份，内容相同：Markdown 源文件 <code>docs/MANUAL.md</code>，以及由它生成的 HTML 版 <code>docs/manual.html</code>（面板上点"说明书"就是它）。每次修改工作台都会同步更新这两份。</blockquote>
+</section>
+<section id="s1"><h2><span class="num">1</span>一页看懂</h2>
+<p>工作台是装在实验服务器上的一套后台程序 + 一个只读网页面板，分两半：</p>
+<div class="tbl"><table><thead><tr><th></th><th>实验侧</th><th>论文侧</th></tr></thead><tbody><tr><td>解决什么</td><td>实验跑完没记下来；想回到某次实验的代码却回不去</td><td>每天的新论文看不过来；不知道领域里谁在什么数据集上做到多少；想不出好 IDEA</td></tr><tr><td>怎么做</td><td>守护进程在实验<strong>启动那一刻</strong>自动保存现场；你说"记录"时由 agent 归类</td><td>每天凌晨抓新论文 → 判是否属于你的方向 → 读全文速读 → 挑 ≤ 10 篇精选并写精读 → 更新结果表、地图、必读 → 推进研究线 → 08:30 推送</td></tr><tr><td>你要做什么</td><td>照常跑实验（输出重定向到日志）；想记录时对 agent 说"记录"</td><td>早上看 Telegram，在面板里读；觉得好或烂就告诉 agent 打分</td></tr></tbody></table></div>
+<p><strong>你不需要敲命令。</strong> 所有反馈都对 Claude / codex 说，agent 调用 <code>wb</code> 命令写入。面板只读，不能在网页上改任何东西。</p>
+<p><strong>它不会做的事：</strong></p>
+<ul><li>不改你的代码、不切你的分支、不碰你仓库的 <code>.git</code>（代码快照存在工作台自己的仓库里）。</li><li>不删除任何实验产物（除非你明确说"不要了"）。</li><li>告诉过你的 IDEA，只有你明确说删才删。</li><li>画像（研究方向、口味）的修改：你亲口说出的口味直接写入；由评价自动推出的修改要先给你看、你确认才生效，旧版本都留底。</li></ul>
+</section>
+<section id="s2"><h2><span class="num">2</span>整体结构</h2>
+<pre class="code diagram"><code>                 ┌──────────── 实验服务器 ────────────────────────────────────────┐
+你跑实验 ──────▶ │ wbd 守护进程（每分钟由 cron 保活，每 2 秒扫一次进程）            │
+                 │   └─ 抓现场 → $WB_HOME/runs/ + snapshots.git                     │
+                 │                                                                  │
+外部论文源 ────▶ │ 每日流程 wb daily run（01:00）→ 论文库 / 结果表 / 地图 / IDEA    │
+arXiv、HF、S2、  │ 自动补跑 wb daily resume（每 30 分钟）                            │
+GitHub、HN       │ 推送 wb daily push（08:30）──────────────────────────▶ Telegram  │
+                 │                                                                  │
+                 │ 只读面板（Docker，FastAPI，端口 8765）+ 只读 MCP（/mcp）          │
+                 └──────────────────────────────────────────────────────────────────┘
+你 ◀──── 读面板、看推送；对 agent 说话 ──▶ agent 调 wb 命令写入</code></pre>
+<p><strong>四个地方，各管一件事：</strong></p>
+<div class="tbl"><table><thead><tr><th>位置</th><th>放什么</th><th>进不进 GitHub</th></tr></thead><tbody><tr><td>仓库（服务器上的部署目录）</td><td>代码、面板、agent 规则与 skill、设计文档</td><td>是（GitHub 是唯一来源）</td></tr><tr><td><code>$WB_HOME</code>（数据目录）</td><td>Run、论文库、地图、IDEA、报告，以及<strong>你的个人配置</strong>（<code>config.json</code>、<code>registry/field.json</code>、<code>registry/seeds.json</code>）</td><td>否</td></tr><tr><td><code>$WB_HOME/secrets/</code>（权限 600）</td><td>批量模型 key、额度管理端 key</td><td>否</td></tr><tr><td><code>panel/.env</code></td><td>面板容器的 uid、路径、端口</td><td>否</td></tr></tbody></table></div>
+<p><strong>两类模型：</strong></p>
+<ul><li><strong>批量模型</strong>（Gemini，经 GPT-Load 网关）：相关性判定、速读、精读、结果表整理、中稿评估、口味打分、地图每日归类与叙述、研究主题、周报。量大、便宜。</li><li><strong>codex</strong>（<code>codex exec</code>，用 ChatGPT 订阅额度）：地图重组、构思、独立审稿、研究线每天的一步、问题文档与 IDEA 文档。少而重，额度紧。</li></ul>
+</section>
+<section id="s3"><h2><span class="num">3</span>时间表：系统每天自己在做什么</h2>
+<p>时间均为北京时间。</p>
+<div class="tbl"><table><thead><tr><th>时间</th><th>发生什么</th><th>在面板哪里看</th></tr></thead><tbody><tr><td>全天，每 2 秒</td><td>守护进程检查新启动的实验，<strong>启动那一刻</strong>保存现场</td><td>待认领</td></tr><tr><td>每天 01:00</td><td>每日流程，13 步依次执行（见第 5 节）</td><td>今日论文 → 页面底部"流程明细"</td></tr><tr><td>每天 08:30</td><td>Telegram 推送当期</td><td>—</td></tr><tr><td>每 30 分钟</td><td>自动补跑：额度恢复后接着跑暂停 / 失败的步骤；补好了推"🔄 更新"；没有欠账时按预算续跑历史回填</td><td>今日论文 → 流程明细</td></tr><tr><td>每周一</td><td>广撒网构思（第 11 节）；出上周周报</td><td>IDEA、报告</td></tr><tr><td>每月 1 日</td><td>出上月月报</td><td>报告</td></tr><tr><td>每周最多一次</td><td>领域地图重组（其余日子只把新论文归进已有类别）</td><td>地图</td></tr><tr><td>每 30 天</td><td>研究主题表重新提议一次（保留稳定的 id）</td><td>地图 → 热点</td></tr></tbody></table></div>
+<p><strong>一期 = 一天。</strong> 08:30 推第一版；当天有新进展（精读补好了、被录用了、放出代码了、重新精选了）就更新同一期，不另开一期。</p>
+</section>
+<section id="s4"><h2><span class="num">4</span>实验侧：自动记录实验</h2>
+<h3 id="s4-1">4.1 自动抓现场（ADR-0001～0009）</h3>
+<p>守护进程 <code>wbd</code> 每 2 秒扫一次<strong>当前用户</strong>的进程。候选是：python 进程且工作目录 / 脚本在 <code>watch_roots</code>（你配置的实验根目录）下，或任何用了 GPU 的进程。</p>
+<ul><li>候选活过一个 tick 就拍代码快照（<code>python -c</code> 之类的短命进程不浪费快照）；</li><li>用了 GPU 或活过 60 秒就成为一个 <strong>Run</strong>。</li></ul>
+<p>每个 Run 在<strong>启动那一刻</strong>保存：</p>
+<div class="tbl"><table><thead><tr><th>内容</th><th>说明</th></tr></thead><tbody><tr><td>代码</td><td>含未提交改动和 untracked 文件。存在集中的 bare 仓库 <code>$WB_HOME/snapshots.git</code>，不碰你自己的 <code>.git</code>、不切分支、不动 stash；git 自动去重</td></tr><tr><td>命令</td><td>完整命令行、工作目录</td></tr><tr><td>环境</td><td>环境变量（密钥类自动脱敏）、<code>requirements.txt</code>、GPU 采样</td></tr><tr><td>日志</td><td>进程输出重定向到的文件</td></tr><tr><td>产物</td><td>checkpoint / 预测等的只读副本（&gt; 50GB 或磁盘紧张时只做硬链接），永久保留</td></tr><tr><td>对话关联</td><td>找到启动这个实验的那段 codex / Claude 对话（读 <code>~/.codex/sessions</code>、<code>~/.claude/projects</code>，只看启动前 12 小时内的）</td></tr></tbody></table></div>
+<p><strong>你唯一要配合的</strong>：启动实验时把输出重定向到日志文件，例如 <code>nohup python train.py --seed 0 &gt; logs/seed0.log 2&gt;&amp;1 &amp;</code>。agent 规则里已经写了这一条。</p>
+<h3 id="s4-2">4.2 层级（ADR-0010）</h3>
+<pre class="code diagram"><code>项目 Project = 你自己要写的一篇论文（手动创建；别人论文的代码只是 baseline）
+└─ 实验 = 论文里的一个 claim
+   └─ 配置组 Variant = 方法 × 参数 × 任务，只差种子；均值 ± 标准差在这层算
+      └─ Run = 一次运行（守护进程自动抓到，认领前在&quot;待认领&quot;里）</code></pre>
+<h3 id="s4-3">4.3 认领："记录"（ADR-0009）</h3>
+<p>你说"记录"时，agent：<code>wb inbox</code> 找到 Run → <code>wb context &lt;RUN&gt;</code> 从启动它的对话里起草"目的" → 跟你确认归属 → <code>wb adopt &lt;RUN&gt; -v &lt;配置组&gt; -p &quot;&lt;目的&gt;&quot;</code>。</p>
+<p>认领后，同一配置组里不同种子自动算<strong>均值 ± 标准差</strong>；组内代码 / 参数不一致（除了种子字段）会给出警告。</p>
+<p>不是实验的进程（调试、下载、服务）说"这个不是实验"，agent 执行 <code>wb ignore &lt;RUN&gt;</code>：只是不再出现在待认领里，记录和产物都保留。</p>
+<h3 id="s4-4">4.4 还原与对比</h3>
+<ul><li><code>wb restore &lt;RUN&gt; [目录]</code>：生成一个独立目录，代码、依赖清单、重跑脚本齐全，不碰当前工作区。git 仓库会带上历史，<code>git status</code> 就是当时的未提交改动。</li><li><code>wb diff &lt;RUN&gt; [&lt;RUN2&gt;]</code>：两次实验之间的代码差异，或和现在的工作区比。</li><li>复现对比（ADR-0023）：<code>wb repro ref &lt;配置组&gt;</code> 记录论文报告的数字，<code>wb repro check</code> 和我们的均值 ± 标准差比，容差内算"已复现"。</li></ul>
+</section>
+<section id="s5"><h2><span class="num">5</span>论文侧：每日论文流程</h2>
+<p>每天 01:00 由 cron 启动 <code>wb daily run</code>，13 步依次执行。每一步的状态（ok / paused / failed）、耗时和结果摘要都记在当期里，面板"今日论文"底部的"流程明细"能看到。</p>
+<div class="tbl"><table><thead><tr><th>#</th><th>步骤</th><th>做什么</th><th>用谁</th></tr></thead><tbody><tr><td>1</td><td>harvest 抓取</td><td>arXiv（研究方向的每个关键词 × 指定分类，近 4 天新提交）、HF Daily Papers、引用了种子论文的新论文（Semantic Scholar）。去重顺序：arXiv ID &gt; DOI &gt; 标题</td><td>—</td></tr><tr><td>2</td><td>judge 相关性判定</td><td>每批 30 篇标题 + 摘要，只判"是否属于研究方向"，不评好坏。你标过"不相关"的论文作为反例写进提示</td><td>批量模型</td></tr><tr><td>3</td><td>read 速读</td><td>属于方向的每篇读全文：中文标题、一句话、问题 / 方法 / 实验与结果 / 局限、实验设置、维度标签、<strong>原文数字抽取</strong>、评测规模、质量分。所有数字只能来自原文，不确定就不写</td><td>批量模型</td></tr><tr><td>4</td><td>results 结果表</td><td>新数据集名归类、补评测规模、核对方法名、核实代码、重建结果表索引（第 8 节）</td><td>批量模型 + GitHub API</td></tr><tr><td>5</td><td>attention 关注度</td><td>HF 点赞、Hacker News 讨论、录用会议与引用数（S2）</td><td>—</td></tr><tr><td>6</td><td>choose 精选</td><td>≤ 10 篇（第 6 节）</td><td>批量模型</td></tr><tr><td>7</td><td>repos 新仓库</td><td>方向内新出现的 GitHub 仓库，过口味过滤</td><td>批量模型</td></tr><tr><td>8</td><td>hf HF Daily 栏</td><td>近 7 天上过 HF Daily、属于方向的论文按点赞取前 5，过口味过滤</td><td>批量模型</td></tr><tr><td>9</td><td>explain 精读</td><td>每篇精选写 8 步精读 HTML（paper-explainer）</td><td>批量模型（默认）或 codex</td></tr><tr><td>10</td><td>map 领域地图</td><td>新论文归类、打研究主题、更新发展史 / 热点 / 评测与基线 / 空白；每周最多重组一次分类</td><td>批量模型；重组用 codex</td></tr><tr><td>11</td><td>ideate 构思</td><td>推进研究线各一步；周一另做广撒网构思（第 11 节）</td><td>codex</td></tr><tr><td>12</td><td>reports 报告</td><td>热点榜（近 72 小时）、必读清单刷新；周一周报、1 日月报</td><td>批量模型</td></tr><tr><td>13</td><td>profile 画像</td><td>新评价攒够 3 条时起草画像修改（等你确认）</td><td>批量模型</td></tr></tbody></table></div>
+<p><strong>收录 vs 精选：</strong> 收录只判"是否属于方向"，属于的每篇都有速读，都进论文库、结果表、地图；精选是从中挑出值得你今天读的，每篇另有精读。</p>
+<p><strong>你自己提供论文</strong>（ADR-0033）：对 agent 说"把这篇加进来"（arXiv 号、链接、标题或服务器上的 PDF），执行 <code>wb paper add</code>，直接进库并立刻速读，可选设为种子、顺带精读。你提供的论文不进每日精选（你已经知道了），但参与地图、结果表、构思和画像。</p>
+<p><strong>回填：</strong> 首次安装时 <code>wb backfill</code> 回填近 12 个月的 arXiv 和引用 baseline 的论文；之后每 30 分钟的自动补跑在额度有富余时按预算续跑。顶会顶刊论文另有检索（第 9 节），所以论文库对近 12 个月是全量，更早的只有顶会顶刊论文。</p>
+</section>
+<section id="s6"><h2><span class="num">6</span>精选是怎么挑出来的</h2>
+<p>（ADR-0020、0027、0036、0037、0039）</p>
+<pre class="code diagram"><code>近 90 天属于方向、质量 ≥ 6 的候选
+  │ ① 原分数 = 质量 + 关注度 + 与种子的引用关系 + 有代码 / 已录用
+  ▼
+取原分数前若干篇
+  │ ② 硬门槛：方法类论文必须和&quot;领域常用方法&quot;至少比过一个，否则直接出局
+  ▼
+  │ ③ 一次批量模型调用，对每篇给出：
+  │     中稿评估 accept（1–10，按 CCF-A 主会审稿标准，依据是结果表统计出的证据）
+  │     口味分 like（0–1，对照你的评价与画像里的口味）
+  │   accept &lt; 5 出局；like &lt; 0.4 出局
+  ▼
+总分 = 0.3 × 原分数 + 0.4 × 中稿评估 + 0.3 × 口味分     （没有口味时 0.4 × 原分数 + 0.6 × 中稿评估）
+  │
+  ▼
+按总分排序，最多 10 篇；达标的不够 10 篇就少推</code></pre>
+<p><strong>领域常用方法</strong>：被论文库里 ≥ 5 篇论文当作对比方法的方法，去掉通用做法（CoT、ReAct、Debate……）、模型名（GPT-4o……）和现成 agent 工具（Claude Code、Codex……）。也可以在画像里用 <code>selection.standard_baselines</code> 直接指定（会覆盖自动计算）。</p>
+<p><strong>推送和面板里会写出依据</strong>：对比了哪些常用方法、中稿评估几分、为什么合你口味。</p>
+<p><strong>额度不够时</strong>：中稿评估 / 口味打分做不成，就先按原排序出刊，同时记下"待重新精选"；额度恢复后由自动补跑按完整规则重选，原精选留底，补精读并推送更新。</p>
+<p><strong>手动重新精选</strong>：<code>wb daily repick --reason &quot;…&quot; --force</code>（例如你改了口味后让 agent 重排本期）。</p>
+<p><strong>HF Daily 栏</strong>单独一栏，不算精选：方向不放宽（必须属于你的方向），但不过 baseline 硬门槛，所以会写明"有没有和领域常用方法比较"；你评过 ≤ 2 分的、重新精选时被换掉的不推。</p>
+</section>
+<section id="s7"><h2><span class="num">7</span>评价、口味与画像</h2>
+<p>（ADR-0015、0033、0036、0039）</p>
+<p><strong>画像</strong>存在 <code>$WB_HOME/registry/field.json</code>，包括：</p>
+<ul><li>研究方向：名称、描述、子主题、arXiv 检索词与分类、维度（优化对象 / 搜索方式 / 粒度 / 论文类型）；</li><li>精选参数：每天最多几篇、质量门槛、候选窗口、领域常用方法名单；</li><li><strong>口味</strong>：<code>taste.likes</code>（喜欢什么）、<code>taste.dislikes</code>（不喜欢什么）；</li><li>构思参数：研究线上限、你配置的工作区与结果目录。</li></ul>
+<p><strong>评价</strong>：对 agent 说"这篇给 1 分，理由是……"，执行 <code>wb paper rate &lt;论文&gt; &lt;1-5&gt; --note &quot;理由&quot;</code>。1 很差 · 2 差 · 3 一般 · 4 好 · 5 很好。论文页有"我的评价"区，论文库可按评价筛选 / 排序。</p>
+<p><strong>评价和口味怎么起作用：</strong></p>
+<div class="tbl"><table><thead><tr><th>地方</th><th>作用</th></tr></thead><tbody><tr><td>每日精选</td><td>口味分参与排序，&lt; 0.4 不推（第 6 节）</td></tr><tr><td>HF Daily 栏、新仓库、热点、必读里的"值得读"</td><td>过口味过滤，不合口味的不推，推送 / 面板写出理由</td></tr><tr><td>IDEA</td><td>不合口味的不告知你（保留在隐藏区）</td></tr><tr><td>构思</td><td>评价 ≤ 2 的论文不作为方法依据</td></tr><tr><td>画像</td><td>新评价攒够 3 条，每日流程自动起草画像修改，推送里提示；你确认后 <code>wb field apply</code> 才写入</td></tr></tbody></table></div>
+<p>"不相关"和低评价不同：<strong>不相关</strong>是"这篇不属于我的方向"（以后少收类似的）；<strong>低评价</strong>是"属于方向，但做得不好 / 不合口味"。</p>
+<p>修改画像前自动留底（<code>registry/field.history/</code>）。</p>
+</section>
+<section id="s8"><h2><span class="num">8</span>跨论文结果表</h2>
+<p>（ADR-0027、0034、0035）回答"同一个数据集、同一个指标下，各方法报告了多少"。</p>
+<p><strong>组织方式</strong>：任务类别（数学 / 代码生成 / 问答 / 知识与综合推理 / 智能体 / 其它）→ 每个数据集一张表，行 = 方法，列 = 指标，最好加粗、第二下划线。<strong>不按 backbone 拆</strong>（复现时你自己跑），backbone 悬停可见。</p>
+<p><strong>每个数字都带：</strong></p>
+<div class="tbl"><table><thead><tr><th>标注</th><th>含义</th></tr></thead><tbody><tr><td>评测规模</td><td><strong>全量</strong>（完整划分）/ <strong>子集</strong>（随机抽样或选了一部分，带题数）/ <strong>未注明</strong>（原文没写）。从原文抽取，不靠猜；题数和官方全量都知道时按数字判定（论文常把过滤后的集合也叫 test set）</td></tr><tr><td>代码</td><td>这个方法自己论文的代码是否真的开源：已开源 / 只有 README / 空仓库 / 匿名审稿仓库 / 链接失效 / 未开源。GitHub 逐个查仓库内容；已开源的每 30 天复查，其余每 7 天复查</td></tr><tr><td>方法名</td><td>按原文核对过：速读抽取的名字先机械检查是否出现在原文，再由模型对照原文段落核对准确写法、是不是本文提出的方法。更正后的名字悬停可见原抽取写法；原文找不到的不进表</td></tr><tr><td>出处</td><td>点回论文与表号；是原论文报告还是别人转引</td></tr></tbody></table></div>
+<p><strong>同一方法在同一格有多处报告时</strong>：优先它自己的论文，其次全量评测，再次数值最高的那条；转引取中位数；其余放悬停提示。只汇总，不改写数字（唯一换算：同一列大多是百分数而这一条写成 0.xx 时乘 100，并注明）。百分比类指标超出 0–100 的不进表。</p>
+<p><strong>数据集归一</strong>：同一数据集的不同写法合并（"GPQA-Diamond" / "GPQA Diamond"），不同版本分开（AIME 2024 / 2025，SWE-bench / SWE-bench Verified），子集写法（"MATH (lv5*)"）并到父数据集并标为子集。常见数据集写在代码里（含官方全量规模），其余由模型归类一次，存 <code>registry/datasets.json</code>。</p>
+<p>命令：<code>wb results</code> 列数据集；<code>wb results &lt;数据集&gt;</code> 看报告；<code>wb results refresh</code> 手动刷新。</p>
+</section>
+<section id="s9"><h2><span class="num">9</span>顶会顶刊必读</h2>
+<p>（ADR-0040）面板"必读"页，按首次公开时间排序。</p>
+<p><strong>算顶会顶刊的</strong>：CCF-A 会议与期刊（含 TPAMI）、ICLR（CCF 未列，单独标注）、Nature / Science 及子刊。<strong>不算</strong>：研讨会（workshop）、Findings、demo / tutorial / 博士论坛等。ACL 系列靠 DOI 区分主会和 Findings。会议年份只用录用信息里写明的，不拿 arXiv 年份代替。</p>
+<p><strong>来源</strong>：论文库只回填了近 12 个月的 arXiv，经典工作大多不在库里，所以另用 Semantic Scholar 按方向关键词 × 顶会顶刊（2023 年起）检索，新论文进库走相关性判定与速读（不进每日精选）。录用信息综合 S2、arXiv 评论、速读里作者自称的会议。</p>
+<p><strong>必读</strong> = 属于方向 + 顶会顶刊 + 至少一条：</p>
+<ul><li>种子论文；</li><li>领域常用方法的原论文；</li><li>被论文库里 ≥ 3 篇论文当作对比方法；</li><li>高引用（发表满一年 ≥ 100，不满一年 ≥ 40），且过口味过滤。</li></ul>
+<p>其余顶会顶刊论文是<strong>值得读</strong>，过口味过滤。命令：<code>wb topvenue run | ls [--worth]</code>。</p>
+</section>
+<section id="s10"><h2><span class="num">10</span>领域地图</h2>
+<p>（ADR-0021、0041）面板"地图"页分两部分。</p>
+<p><strong>A. 看懂领域</strong>（每天更新，统计部分可复核，叙述部分每条都要引用论文 id 或统计数字）：</p>
+<div class="tbl"><table><thead><tr><th>部分</th><th>内容</th></tr></thead><tbody><tr><td>发展史</td><td>各阶段的主线 + 里程碑论文 + 每个里程碑对比过哪些更早的里程碑</td></tr><tr><td>研究热点变化</td><td>15 个研究主题按半年的<strong>占比</strong>（不看篇数，因为早期只收了顶会论文）与近半年变化；早期样本少的时间段单独标注</td></tr><tr><td>评测与基线</td><td>现在要比的 baseline、每年常用的 benchmark、各 benchmark 的饱和度（看前 10% 成绩，样本 ≥ 8 才算）</td></tr><tr><td>空白与其它发现</td><td>主题 × 搜索方式矩阵里的空格 + 有依据的发现</td></tr></tbody></table></div>
+<p><strong>研究主题</strong>：比维度标签更细的热点（如"查询自适应路由与分级编排""通信图剪枝与 Token 效率优化"），由模型从按时间分层抽样的论文里提出 12–20 个，每篇论文打 1–2 个，新论文每天增量打；主题表每 30 天重新提议一次，存 <code>registry/themes.json</code>，你可以改。</p>
+<p><strong>B. 分类</strong>（Related Work 文体）：一个主分类，每类写核心思路、代表工作（优先里程碑，再加近半年代表作）、<strong>这一类没考虑到什么</strong>（找问题的入口）。每天把新论文归进已有类别；每周最多由 codex 重组一次，版本全留（<code>map/v&lt;N&gt;.json</code>）。<code>wb map rebuild --fresh</code> 全面重建（重新划分类别，不照搬上一版）。</p>
+</section>
+<section id="s11"><h2><span class="num">11</span>构思：研究线与 IDEA</h2>
+<p>（ADR-0018、0024、0025、0042、0043）</p>
+<h3 id="s11-1">11.1 研究线：少而深</h3>
+<p>一条<strong>研究线</strong> = 一个具体研究问题，持续多天推进。<strong>同时最多 3 条。</strong></p>
+<p>每天每条线由 codex 推进<strong>一步</strong>，步骤类型包括：精读关键论文、查新（联网查有没有人做过）、分析失败样本、形式化方法、设计最小实验、修改 IDEA 草稿。发现和证据记在线上（面板 IDEA 页能看到每一步的研究记录）。</p>
+<p>草稿成熟（codex 判断 ready_for_review）才交<strong>独立审稿</strong>：</p>
+<ul><li>通过 → 成为正式 IDEA，写问题文档与 IDEA 文档，推送告诉你；</li><li>没通过 → 按审稿意见继续推进；</li><li>审稿 3 次仍不过 → 搁置，写明原因。</li></ul>
+<p><strong>研究线从哪来</strong>（优先级从高到低）：</p>
+<div class="tbl"><table><thead><tr><th>来源</th><th>怎么建</th></tr></thead><tbody><tr><td><strong>mine</strong> 你自己的研究问题</td><td>对 agent 说"加一条研究线：……"，执行 <code>wb thread add &quot;问题&quot; --mine</code>。<strong>最优先</strong></td></tr><tr><td><strong>repro</strong> 复现与 bad case</td><td>只有你在画像里<strong>显式配置</strong>了结果目录（<code>ideation.badcase_roots</code>）才会自动建一条，分析各方法的逐样本预测与评测。不会从其它目录推断</td></tr><tr><td><strong>open</strong> 领域开放问题</td><td>以往接近通过的候选（没被否决、均分 ≥ 6，已有审稿意见）优先，其次是地图里各类"没考虑到什么"</td></tr></tbody></table></div>
+<p>有空位时按这个优先级补。你可以随时：<code>wb thread park &lt;id&gt; --reason</code>（搁置）、<code>resume</code>（恢复）、<code>drop --reason</code>（放弃）。</p>
+<h3 id="s11-2">11.2 每周广撒网</h3>
+<p>每周一另做一次广撒网构思：codex 根据论文库、地图、结果表、以往被拒的审稿意见想多个候选 IDEA，每个都针对一个有真实证据的问题。提示里写明四类常见被拒原因（撞了已有工作、证据错、问题不真实、贡献不够）的对应要求。接近通过的（没被否决、均分 ≥ 6）按审稿意见修改一轮、换审稿人重评；仍不过的进研究线候选。</p>
+<h3 id="s11-3">11.3 独立审稿</h3>
+<p>审稿人是另一个 codex 会话，<strong>联网查新</strong>，按 idea-reviewer skill 打分：</p>
+<ul><li><strong>两票否决</strong>：新颖性（已有人做过）、问题真实性（问题不存在或证据不成立），任一否决即不通过；</li><li>其余维度均分 <strong>≥ 7</strong> 才通过；</li><li>再过一次口味过滤，不合口味的不告诉你（保留在隐藏区）。</li></ul>
+<h3 id="s11-4">11.4 IDEA 的生命周期</h3>
+<pre class="code diagram"><code>候选（ideas/.hidden/，没通过的留着用于去重）
+  └─ 通过审稿 → IDEA（ideas/&lt;id&gt;/：问题文档 + IDEA 文档 + 审稿意见 + 查新记录）
+        ├─ wb idea verify   开始验证
+        ├─ wb idea promote  升级为某个项目的 claim
+        ├─ wb idea abandon  放弃
+        └─ wb idea delete   删除（只在你明确要求时；移到 ideas/.deleted/，可恢复）</code></pre>
+</section>
+<section id="s12"><h2><span class="num">12</span>Telegram 推送</h2>
+<p>每天 08:30 一条，内容依次：</p>
+<ol><li><strong>今日精选</strong>（≤ 10 篇）：中文标题（链到面板）、一句话、会议 / 质量分 / 是否有代码、对比了哪些常用方法、中稿评估、为什么合你口味；</li><li><strong>🤗 HF Daily · 你的方向</strong>（≤ 5 篇，按点赞）：写明是否和领域常用方法比较过；</li><li>另有多少篇新收录（链到当期页面）；</li><li><strong>💡 通过评审的 IDEA</strong>；</li><li><strong>🔬 研究线进展</strong>：只报实质进展（新开一条 🧭、审稿结果 📝、通过 ✅、搁置 ⏸），不报日常的每一步；</li><li>新仓库；</li><li><strong>⏸ 暂停中（额度）</strong> / <strong>⚠️ 有步骤没成功</strong>：哪一步、原因、预计恢复时间；</li><li><strong>🧭 画像修改建议</strong>（攒够 3 条新评价时）；</li><li>在面板查看本期的链接。</li></ol>
+<p>当天有补跑或重新精选，会推一条"🔄 更新"。任何一步失败也会推告警。</p>
+</section>
+<section id="s13"><h2><span class="num">13</span>面板逐页说明</h2>
+<p>面板只读（FastAPI + Docker，默认端口 8765），所有挂载都是只读的。</p>
+<div class="tbl"><table><thead><tr><th>页面</th><th>地址</th><th>看什么</th></tr></thead><tbody><tr><td>首页</td><td><code>/</code></td><td>我的论文（项目）和待认领的 Run</td></tr><tr><td>今日论文</td><td><code>/issue</code>、<code>/issue/&lt;日期&gt;</code></td><td>当期精选（带依据）、HF Daily 栏、其它新收录、进展；底部"流程明细"是每一步的状态和耗时</td></tr><tr><td>论文库</td><td><code>/papers</code></td><td>全部属于方向的论文；按维度、评价筛选；"已整理优先"或"最新发表"排序</td></tr><tr><td>论文页</td><td><code>/paper/&lt;id&gt;</code></td><td>速读、实验设置、抽取的数字、代码核实、录用信息、我的评价；<code>/paper/&lt;id&gt;/explainer</code> 是 8 步精读</td></tr><tr><td>地图</td><td><code>/map</code></td><td>发展史、热点变化（带小趋势图）、评测与基线、空白与发现、分类</td></tr><tr><td>必读</td><td><code>/must-read</code></td><td>顶会顶刊必读与值得读，按时间排序</td></tr><tr><td>结果表</td><td><code>/results</code></td><td>选任务类别 → 每个数据集一张表；点数据集名看全部方法和各论文的评测设置</td></tr><tr><td>IDEA</td><td><code>/ideas</code>、<code>/idea/&lt;id&gt;</code></td><td>通过的 IDEA；研究线（每条的研究记录、审稿历史）；每天的构思记录；最接近通过的候选（折叠）</td></tr><tr><td>热点</td><td><code>/hot</code></td><td>近 72 小时关注度榜</td></tr><tr><td>报告</td><td><code>/reports</code></td><td>周报、月报</td></tr><tr><td>待认领</td><td><code>/inbox</code></td><td>守护进程抓到、还没认领的 Run</td></tr><tr><td>说明书</td><td><code>/manual</code></td><td>本说明书的 HTML 版</td></tr><tr><td>项目 / 配置组 / Run</td><td><code>/p/&lt;id&gt;</code>、<code>/v/&lt;id&gt;</code>、<code>/r/&lt;id&gt;</code></td><td>均值 ± 标准差、一致性警告、代码差异、日志、关联对话、复现对比</td></tr></tbody></table></div>
+<p><strong>只读 MCP</strong>：任意机器上的 Claude / codex 可以通过 <code>http://&lt;服务器&gt;:8765/mcp</code> 查询工作台（只读）。</p>
+</section>
+<section id="s14"><h2><span class="num">14</span>你怎么用：对 agent 说的话与命令</h2>
+<p>大多数时候对 agent 说就行，下表是 agent 会执行的命令，供你核对。所有命令都支持 <code>--json</code>。</p>
+<h3 id="h-实验">实验</h3>
+<div class="tbl"><table><thead><tr><th>你说</th><th>agent 执行</th></tr></thead><tbody><tr><td>"记录"</td><td><code>wb inbox</code> → <code>wb context &lt;RUN&gt;</code> → 跟你确认 → <code>wb adopt &lt;RUN&gt; -v &lt;配置组&gt; -p &quot;目的&quot;</code></td></tr><tr><td>"这几个结果怎么样"</td><td><code>wb summary &lt;项目 / 项目/C1 / 配置组&gt;</code></td></tr><tr><td>"回到上周那次实验的代码"</td><td><code>wb restore &lt;RUN&gt;</code></td></tr><tr><td>"这次和上次改了什么"</td><td><code>wb diff &lt;RUN&gt; [&lt;RUN2&gt;]</code></td></tr><tr><td>"这个不是实验"</td><td><code>wb ignore &lt;RUN&gt;</code></td></tr><tr><td>"补一句结论 / 这个跑坏了"</td><td><code>wb note &lt;RUN&gt; -c &quot;结论&quot; --status failed</code></td></tr><tr><td>"新建一篇论文 / 一个 claim / 一个配置组"</td><td><code>wb project add</code>、<code>wb exp add</code>、<code>wb variant add</code></td></tr><tr><td>"这些产物不要了"</td><td><code>wb rm-artifacts &lt;RUN&gt; --yes --reason &quot;…&quot;</code>（只在你明确说时）</td></tr></tbody></table></div>
+<h3 id="h-论文">论文</h3>
+<div class="tbl"><table><thead><tr><th>你说</th><th>agent 执行</th></tr></thead><tbody><tr><td>"读过了 / 收藏 / 不相关 / 想复现这篇"</td><td><code>wb paper mark &lt;论文&gt; --read / --fav / --irrelevant / --reproduce</code></td></tr><tr><td>"这篇给 1 分，理由……"</td><td><code>wb paper rate &lt;论文&gt; 1 --note &quot;…&quot;</code></td></tr><tr><td>"把这篇加进来"</td><td><code>wb paper add &lt;arXiv号/链接/标题/PDF&gt; [--seed] [--explain]</code></td></tr><tr><td>"加 / 删种子论文"</td><td><code>wb seed add / rm</code></td></tr><tr><td>"我更关注提点，不喜欢……"（口味）</td><td>改 <code>taste.likes / dislikes</code>（你亲口说的直接写入，旧版本留底）</td></tr><tr><td>"看看画像修改建议" / "按建议改"</td><td><code>wb field suggest</code> / <code>wb field apply</code></td></tr><tr><td>"按新口味重新精选今天的"</td><td><code>wb daily repick --reason &quot;…&quot; --force</code></td></tr><tr><td>"AIME 上各方法多少"</td><td><code>wb results AIME</code></td></tr><tr><td>"重建地图分类"</td><td><code>wb map rebuild --fresh</code></td></tr><tr><td>"今天流程怎么样 / 额度还剩多少"</td><td><code>wb daily status</code></td></tr></tbody></table></div>
+<h3 id="h-IDEA-与研究线">IDEA 与研究线</h3>
+<div class="tbl"><table><thead><tr><th>你说</th><th>agent 执行</th></tr></thead><tbody><tr><td>"加一条研究线：……"</td><td><code>wb thread add &quot;问题&quot; --mine</code></td></tr><tr><td>"研究线进展"</td><td><code>wb thread ls</code> / <code>wb thread show &lt;id&gt;</code></td></tr><tr><td>"先停掉这条 / 恢复 / 不做了"</td><td><code>wb thread park / resume / drop &lt;id&gt; --reason &quot;…&quot;</code></td></tr><tr><td>"开始验证这个 IDEA / 放弃 / 升级为 claim"</td><td><code>wb idea verify / abandon / promote</code></td></tr><tr><td>"删掉这个 IDEA"</td><td><code>wb idea delete</code>（只在你明确要求时）</td></tr></tbody></table></div>
+<h3 id="h-系统">系统</h3>
+<div class="tbl"><table><thead><tr><th>命令</th><th>用途</th></tr></thead><tbody><tr><td><code>wb status</code> / <code>wb doctor</code></td><td>状态 / 自检</td></tr><tr><td><code>wb daily run / push / status / resume</code></td><td>每日流程（cron 自动跑）</td></tr><tr><td><code>wb report build / show / hot</code></td><td>周报 / 月报 / 热点</td></tr></tbody></table></div>
+</section>
+<section id="s15"><h2><span class="num">15</span>模型、额度与自动补跑</h2>
+<p>（ADR-0030、0031、0032）</p>
+<div class="tbl"><table><thead><tr><th></th><th>批量模型（Gemini）</th><th>codex</th></tr></thead><tbody><tr><td>接入</td><td><code>$WB_HOME/secrets/llm.env</code>，经 GPT-Load 网关</td><td>服务器上已登录的 codex，<code>config.json</code> 的 <code>codex</code> 可改模型 / provider</td></tr><tr><td>额度来源</td><td>读 GPT-Load 管理端的真实额度（<code>secrets/quota.env</code>）：分组里每个凭据的 5h / 7d 剩余、重置时间、冷却</td><td>ChatGPT 订阅额度</td></tr><tr><td>用于</td><td>判定、速读、精读、结果表、中稿评估、口味、地图归类与叙述、主题、报告</td><td>地图重组、构思、审稿、研究线、问题 / IDEA 文档</td></tr></tbody></table></div>
+<p><strong>额度用完不会白白重试：</strong></p>
+<ul><li>批量模型：分组里<strong>任一凭据</strong>可用就继续；全部不可用时相关步骤标"暂停"，写明预计恢复时间。窗口的重置时间已过就当作已恢复（GPT-Load 只在有请求经过时刷新观测，旧快照不作数）。</li><li>codex：用完时构思 / 研究线标"暂停"。</li><li>每 30 分钟的自动补跑：先做排队的重新精选，再从第一个暂停 / 失败的步骤起往后重跑（<strong>不重跑抓取</strong>），补好了推"🔄 更新"；没有欠账时按预算续跑历史回填。</li></ul>
+<p>随时 <code>wb daily status</code> 看额度和暂停原因；用量记录在 <code>reports/llm_usage.jsonl</code>、<code>reports/codex_usage.jsonl</code>。</p>
+</section>
+<section id="s16"><h2><span class="num">16</span>它读什么、不读什么（数据边界）</h2>
+<p>这一节写清楚工作台会碰你服务器上的哪些东西。</p>
+<div class="tbl"><table><thead><tr><th>读什么</th><th>谁读</th><th>为什么</th></tr></thead><tbody><tr><td><code>watch_roots</code> 下启动的进程（以及任何用 GPU 的进程）的代码目录、命令、环境、日志、产物</td><td>守护进程</td><td>自动抓现场。只在进程启动时拍快照，不改原目录</td></tr><tr><td><code>~/.codex/sessions</code>、<code>~/.claude/projects</code> 里启动前 12 小时内的对话</td><td>守护进程 / <code>wb context</code></td><td>把 Run 和启动它的对话关联起来，起草"目的"</td></tr><tr><td>论文（arXiv、HF、S2、GitHub、HN 的公开数据）</td><td>每日流程</td><td>论文侧的全部功能</td></tr><tr><td>你<strong>显式配置</strong>的 <code>ideation.workspace</code>、<code>ideation.badcase_roots</code></td><td>研究线</td><td>分析你的 bad case。<strong>不配置就不读</strong>；不会从 <code>baseline_dir</code> 或其它目录推断（v0.11.0 修复）</td></tr><tr><td><code>config.json</code> 的 <code>baseline_dir</code></td><td>只用于 agent 规则</td><td>复现论文时官方代码放哪里（ADR-0023）。不作为研究对象</td></tr></tbody></table></div>
+<p><strong>不读：</strong> 你没配置的目录、你的私有评测结果、你的个人项目代码（除非它在 <code>watch_roots</code> 下作为实验被启动，此时只做快照，不拿去构思）。</p>
+<p>构思（研究线、广撒网）的材料是：论文库、地图、结果表、以往审稿意见、你的评价、你显式配置的结果目录，以及<strong>你认领过的</strong> Run。守护进程抓到但没认领的进程（调试脚本、下载命令等）不算你的实验，不进构思材料（v0.11.0 之后修复；之前会把最近 60 个 Run 都给构思）。</p>
+</section>
+<section id="s17"><h2><span class="num">17</span>数据存在哪里</h2>
+<p>全部是文件，面板和 CLI 读同一份。</p>
+<pre class="code diagram"><code>$WB_HOME/
+├── config.json                 本机配置（watch_roots、面板地址、推送、codex……）
+├── secrets/                    llm.env、quota.env（权限 600）
+├── journal.jsonl               所有写操作的流水账
+├── runs/&lt;RUN&gt;/                 run.json（守护进程写的事实）、claim.json（认领时写的判断）、日志、产物副本
+├── snapshots.git               集中的代码快照仓库
+├── registry/
+│   ├── field.json              画像：研究方向、维度、精选参数、口味、构思参数
+│   ├── field.history/          画像的历史版本
+│   ├── seeds.json              种子论文
+│   ├── datasets.json           数据集归一与分类
+│   ├── themes.json             研究主题表
+│   ├── projects/、variants/    项目、claim、配置组
+├── papers/&lt;论文id&gt;/            meta、速读、status.json（已读 / 收藏 / 评价）、code_check.json、explainer.html
+├── map/                        v&lt;N&gt;.json（各版分类）、current、overview.json（发展史 / 热点 / 基线 / 空白）
+├── ideas/
+│   ├── &lt;id&gt;/                   告诉过你的 IDEA
+│   ├── .hidden/                没通过审稿的候选
+│   ├── .deleted/               你删除的（可恢复）
+│   └── threads/&lt;id&gt;/           研究线：thread.json、每一步的记录
+├── reports/
+│   ├── daily/&lt;日期&gt;.json/.log  每期内容与流程日志
+│   ├── weekly/、monthly/       周报、月报
+│   ├── hot.json、must_read.json、results_index.json
+│   └── llm_usage.jsonl、codex_usage.jsonl、*_block.json（额度）
+└── daemon/                     守护进程与 cron 的日志、锁</code></pre>
+</section>
+<section id="s18"><h2><span class="num">18</span>配置项</h2>
+<p><strong><code>$WB_HOME/config.json</code></strong>（默认值见 <code>workbench/config.py</code>）：</p>
+<div class="tbl"><table><thead><tr><th>键</th><th>作用</th></tr></thead><tbody><tr><td><code>watch_roots</code></td><td>守护进程监控的实验根目录</td></tr><tr><td><code>panel_url</code></td><td>推送里的面板链接</td></tr><tr><td><code>telegram_env</code></td><td>含 <code>TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID</code> 的文件路径（工作台只读不复制）</td></tr><tr><td><code>baseline_dir</code></td><td>复现时官方代码放哪里（只写进 agent 规则）</td></tr><tr><td><code>codex</code></td><td>codex 的模型、provider、并发</td></tr><tr><td><code>proxy</code></td><td>访问外部论文源的代理</td></tr><tr><td><code>cron_utc_offset_hours</code></td><td>服务器时区与 cron 的换算</td></tr><tr><td>其它</td><td>抓现场的细节：扫描间隔、成为 Run 的时长、快照大小上限、排除的命令模式、种子字段名、磁盘告警阈值……</td></tr></tbody></table></div>
+<p><strong><code>$WB_HOME/registry/field.json</code></strong>（<code>wb field show / set k=v</code>）：</p>
+<div class="tbl"><table><thead><tr><th>键</th><th>作用</th></tr></thead><tbody><tr><td><code>name</code>、<code>description</code>、<code>subtopics</code></td><td>研究方向</td></tr><tr><td><code>arxiv_keywords</code>、<code>arxiv_categories</code></td><td>抓取范围</td></tr><tr><td><code>facets</code></td><td>维度标签（优化对象 / 搜索方式 / 粒度 / 论文类型）</td></tr><tr><td><code>selection.max_per_day</code>（10）、<code>min_quality</code>（6）、<code>pick_window_days</code>（90）</td><td>精选数量与门槛</td></tr><tr><td><code>selection.standard_baselines</code></td><td>领域常用方法名单（覆盖自动统计）</td></tr><tr><td><code>selection.min_accept</code>（5）、<code>min_like</code>（0.4）、<code>require_std_baselines</code>（开）</td><td>中稿评估、口味、硬门槛</td></tr><tr><td><code>taste.likes</code>、<code>taste.dislikes</code></td><td>口味</td></tr><tr><td><code>explainer_engine</code></td><td>精读用 <code>gemini</code>（默认）还是 <code>codex</code></td></tr><tr><td><code>ideation.max_active_threads</code>（3）、<code>max_reviews_per_thread</code>（3）、<code>scout_weekday</code>（0 = 周一）</td><td>研究线</td></tr><tr><td><code>ideation.workspace</code>、<code>ideation.badcase_roots</code></td><td>你的工作区与结果目录（不配置就不读）</td></tr></tbody></table></div>
+</section>
+<section id="s19"><h2><span class="num">19</span>维护、发版、排障</h2>
+<p>详见 <a href="https://github.com/Roderick-Stinson/research-workbench/blob/main/MAINTAINING.md" target="_blank" rel="noopener"><code>MAINTAINING.md</code></a>，要点：</p>
+<ul><li><strong>GitHub 是唯一来源</strong>。所有改动走：开分支 → 改代码 + 测试（有新决策写 ADR）→ PR → CI 通过 → 合并 → <code>scripts/deploy.sh</code>。部署前有未提交改动会直接拒绝，保证服务器上跑的就是 GitHub 上的 <code>main</code>。</li><li><strong>每次改动都同步改说明书</strong>：行为有变化就改 <code>docs/MANUAL.md</code> 的对应章节，并在第 21 节的"未发布"里写清起因、改了什么、效果；然后 <code>python3 scripts/build_manual.py</code> 重新生成 <code>docs/manual.html</code>，两份一起提交。CI 会检查 HTML 是否和 Markdown 一致，不一致不能合并。</li><li><strong>发版</strong>：你说"发 vX.Y.Z"时，更新 <code>CHANGELOG.md</code> 与版本号 → PR → CI → 合并 → 等 <code>main</code> 的 CI 通过 → 打 tag、建 GitHub Release → 部署。</li><li><strong>个人信息</strong>（路径、IP、账号、项目名）只写在数据目录或 <code>.env</code> 里，不进仓库；CI 会扫描密钥形态的字符串。</li></ul>
+<div class="tbl"><table><thead><tr><th>现象</th><th>先看</th></tr></thead><tbody><tr><td>实验没被抓到</td><td><code>wb doctor</code>；<code>$WB_HOME/daemon/daemon.log</code></td></tr><tr><td>推送没来 / 内容不全</td><td><code>wb daily status</code>；<code>reports/daily/&lt;日期&gt;.log</code>；<code>daemon/daily-cron.log</code></td></tr><tr><td>某一步一直暂停</td><td><code>wb daily status</code> 第二行（额度）；<code>reports/llm_block.json</code>、<code>codex_block.json</code></td></tr><tr><td>面板打不开</td><td><code>docker logs workbench-panel</code></td></tr></tbody></table></div>
+</section>
+<section id="s20"><h2><span class="num">20</span>已知局限</h2>
+<ul><li>直接输出到终端（不重定向）的日志无法事后捕获。</li><li>退出码通常拿不到（守护进程不是父进程），按日志推断。</li><li>轮询有约 2 秒延迟：进程启动后 2 秒内代码就被改会漏掉（面板上"迟到抓取"会标出来）。</li><li>产物超大时只做硬链接，挡不住"原地覆盖写"。</li><li>守护进程按规则抓<strong>所有</strong>符合条件的进程，包括调试脚本、下载命令；不是实验的需要 <code>wb ignore</code>。</li><li>抓取一步失败（例如 arXiv 限流 429）时，自动补跑不会重跑抓取，当天的新论文要等第二天的抓取窗口（覆盖近 4 天）补上。</li><li>服务器停机期间 cron 不跑，那一天没有当期。</li><li>结果表、方法名、评测规模都来自模型对原文的抽取，有核对但不保证 100% 正确；每个数字都能点回原文表号核实。</li><li>早期（12 个月前）的论文只收了顶会顶刊，热点趋势看占比，早期样本少。</li></ul>
+</section>
+<section id="s21" class=versions><h2><span class="num">21</span>版本历史：每个版本做了什么</h2>
+<p>每个版本按三部分写：<strong>起因</strong>（谁提出、为什么改）、<strong>改了什么</strong>、<strong>现在的效果</strong>。完整条目见 <a href="https://github.com/Roderick-Stinson/research-workbench/blob/main/CHANGELOG.md" target="_blank" rel="noopener"><code>CHANGELOG.md</code></a>，设计理由见对应 ADR。</p>
+<div class="tbl"><table><thead><tr><th>版本</th><th>日期</th><th>一句话</th></tr></thead><tbody><tr><td><a href="#ver-v0-1-0"><code>v0.1.0</code></a></td><td>10-12</td><td>第一个公开版本：实验自动记录 + 每日论文情报</td></tr><tr><td><a href="#ver-v0-1-1"><code>v0.1.1</code></a></td><td>10-12</td><td>额度按凭据聚合，不再一个凭据冷却就全停</td></tr><tr><td><a href="#ver-v0-2-0"><code>v0.2.0</code></a></td><td>10-12</td><td>你可以自己加论文，并据此更新研究方向</td></tr><tr><td><a href="#ver-v0-3-0"><code>v0.3.0</code></a></td><td>10-12</td><td>结果表改成论文式，按任务分类，标出评测规模</td></tr><tr><td><a href="#ver-v0-4-0"><code>v0.4.0</code></a></td><td>10-12</td><td>结果表按数据集展示、不拆 backbone；核实代码开源；核对方法名</td></tr><tr><td><a href="#ver-v0-5-0"><code>v0.5.0</code></a></td><td>10-12</td><td>你给论文打分，打分影响每日推荐和画像</td></tr><tr><td><a href="#ver-v0-6-0"><code>v0.6.0</code></a></td><td>10-13</td><td>精选加硬门槛（要有像样的 baseline）+ 中稿评估；口味写进画像</td></tr><tr><td><a href="#ver-v0-7-0"><code>v0.7.0</code></a></td><td>10-14</td><td>顶会顶刊必读；HF Daily 单独一栏；所有推荐都过口味过滤</td></tr><tr><td><a href="#ver-v0-8-0"><code>v0.8.0</code></a></td><td>10-14</td><td>地图改版：发展史、热点变化、评测与基线、空白</td></tr><tr><td><a href="#ver-v0-9-0"><code>v0.9.0</code></a></td><td>10-14</td><td>全面重建地图分类，不照搬上一版</td></tr><tr><td><a href="#ver-v0-10-0"><code>v0.10.0</code></a></td><td>10-14</td><td>构思从被拒中学习，接近通过的修改一轮再评</td></tr><tr><td><a href="#ver-v0-11-0"><code>v0.11.0</code></a></td><td>10-17</td><td>研究线：少而深地持续推进；不再读你的备份目录</td></tr><tr><td><a href="#ver-unreleased"><code>未发布</code></a></td><td>10-17</td><td>本说明书（含 HTML 版，以后每次修改同步更新）；构思不再拿未认领的进程当材料</td></tr></tbody></table></div>
+<article class="card" id="ver-pre"><header><span class="tag">v0.1.0</span><span class="date"></span><h3>之前（10-11 ～ 10-12）：从零搭起来</h3></header>
+<p><strong class="lbl lbl-0">起因</strong> 你提出两个需求：一是实验跑完常常没记下来、想回滚到某次实验的代码却回不去；二是每天跟踪"多智能体架构优化"方向的新论文太费时间，希望自动推送并帮忙想 IDEA。</p>
+<p><strong class="lbl lbl-1">改了什么</strong> 先逐条讨论设计，写成 ADR-0001～0033：</p>
+<ul><li>实验侧（ADR-0001～0013）：抓现场不能靠人记得（自动抓）、启动那一刻就要抓、每个 Run 都能还原、产物永久保留、四级层级、面板只读、所有东西放在实验服务器上。</li><li>论文侧（ADR-0014～0029）：研究方向由一段描述 + 种子论文定义、Telegram 推送、论文来源、先找问题再想 IDEA、每篇精选都要精读、领域地图分维度、独立审稿、推荐逻辑。</li><li>运行（ADR-0030～0032）：精读改用 Gemini（省 codex 额度）、额度熔断、读 GPT-Load 管理端的真实额度。</li></ul>
+<p>这段开发历史留在服务器的 <code>private/history</code> 分支（含个人配置和未脱敏的设计文档），没有推到 GitHub。</p>
+</article>
+<article class="card" id="ver-v0-1-0"><header><span class="tag">v0.1.0</span><span class="date">10-12</span><h3>第一个公开版本</h3></header>
+<p><strong class="lbl lbl-0">起因</strong> 准备把仓库公开到 GitHub（MIT 协议），需要把个人信息移出代码。</p>
+<p><strong class="lbl lbl-1">改了什么</strong></p>
+<ul><li>个人配置（研究方向、种子论文、路径、推送凭据）全部移到数据目录，仓库里只留示例；设计文档脱敏。</li><li>加 LICENSE、CI（单元测试 + 密钥扫描）、部署脚本 <code>scripts/deploy.sh</code>、维护说明 <code>MAINTAINING.md</code>。</li></ul>
+<p><strong class="lbl lbl-2">现在的效果</strong> 实验侧（抓现场、认领、均值 ± 标准差、还原、复现对比）和论文侧（抓取、判定、速读、精选、精读、地图、结果表、构思审稿、推送、额度熔断与补跑）、只读面板与 MCP 全部可用。此后所有改动走"分支 → PR → CI → 合并 → 部署"。</p>
+</article>
+<article class="card" id="ver-v0-1-1"><header><span class="tag">v0.1.1</span><span class="date">10-12</span><h3>额度判断修复</h3></header>
+<p><strong class="lbl lbl-0">起因</strong> GPT-Load 分组里有 3 个凭据，其中一个进入冷却时，流程把整个模型判成"不可用"并暂停，其实另外两个还能用。</p>
+<p><strong class="lbl lbl-1">改了什么</strong> 额度按凭据聚合：只要有一个凭据可用就继续；全部不可用时暂停到最早恢复的那个。<code>wb daily status</code> 显示可用凭据数、最好的 5h / 7d 剩余、每个凭据不可用的原因。CI 的密钥扫描不再被测试产生的 <code>.pyc</code> 误报。</p>
+<p><strong class="lbl lbl-2">现在的效果</strong> 不会因为单个凭据冷却而误停。</p>
+</article>
+<article class="card" id="ver-v0-2-0"><header><span class="tag">v0.2.0</span><span class="date">10-12</span><h3>你自己提供论文、据此更新方向</h3></header>
+<p><strong class="lbl lbl-0">起因</strong> 自动抓取会漏掉你已经知道的重要论文；研究方向的描述和检索词也需要随你的关注点调整（ADR-0033）。</p>
+<p><strong class="lbl lbl-1">改了什么</strong></p>
+<ul><li><code>wb paper add</code>：arXiv 号、链接、标题或服务器上的 PDF 都行，直接进库并速读，可设为种子、可顺带精读。</li><li><code>wb field suggest / apply</code>：根据种子、你提供的论文、你标为"不相关"的论文起草新的方向描述和检索词，你确认后才写入，旧版本留底。</li><li>你标为"不相关"的论文作为反例写进相关性判定的提示。</li></ul>
+<p><strong class="lbl lbl-2">现在的效果</strong> 对 agent 说"把这篇加进来"或"根据这些论文更新我的方向"即可。</p>
+</article>
+<article class="card" id="ver-v0-3-0"><header><span class="tag">v0.3.0</span><span class="date">10-12</span><h3>结果表改成论文式</h3></header>
+<p><strong class="lbl lbl-0">起因</strong> 你提出三点：</p>
+<ol><li>数据集要按类别分（QA、数学、代码生成……）；</li><li>要标出每个方法是在全量数据集上跑的，还是在随机抽样的子集上跑的；</li><li>原来的呈现方式看起来很累，希望像论文里的表格一样，一眼看出同一个数据集、同一个指标下各方法的对比。</li></ol>
+<p><strong class="lbl lbl-1">改了什么（ADR-0034）</strong></p>
+<ul><li>按任务分类（数学 / 代码生成 / 问答 / 知识与综合推理 / 智能体 / 其它），表格行 = 方法、列 = 指标，最好加粗、第二下划线。</li><li>评测规模：每个数字标"全量 / 子集（带题数）/ 未注明"，从原文抽取，不靠猜；同一列混有不同规模时提示。题数和官方全量都知道时按数字判定（论文常把过滤后的集合也叫 test set）。</li><li>数据集名归一（不同写法合并、平均行不进表）。</li><li>修复：种子论文本身也进论文库（之前只追踪引用它们的论文，baseline 自己的原文数字不在表里）。</li></ul>
+<p><strong class="lbl lbl-2">现在的效果</strong> 这一版还按 backbone 分表，下一版改掉了。</p>
+</article>
+<article class="card" id="ver-v0-4-0"><header><span class="tag">v0.4.0</span><span class="date">10-12</span><h3>按数据集展示，核实代码和方法名</h3></header>
+<p><strong class="lbl lbl-0">起因</strong> 你说这种展示方式还是太难受；backbone 不重要，因为反正要自己复现，你只需要知道"哪个数据集上、哪个方法、在哪个指标上达到了多少"。另外要检查代码是否真的开源，并核对方法名是否就是论文里的叫法。你举的例子："Reinforced Collaboration in Multi-Agent Flow Networks" 在面板里被叫成 MASS，实际叫 MANGO。</p>
+<p><strong class="lbl lbl-1">改了什么（ADR-0035）</strong></p>
+<ul><li>每个数据集一张表，不再按 backbone 拆（backbone 悬停可见）；方法自己论文的数字优先，转引取中位数，同一方法的不同配置并成一行。</li><li><code>codecheck.py</code>：逐个检查代码链接，标"已开源 / 只有 README / 空仓库 / 匿名审稿仓库 / 链接失效 / 未开源"，定期复查。</li><li><code>namecheck.py</code>：方法名先查原文里有没有，再由模型对照原文段落核对准确写法、是不是本文提出的方法；原文里找不到的不进表，更正后悬停可见原来的写法。</li><li>子集写法（如 "MATH (lv5*)"）并到父数据集并标为子集；超出 0–100 的百分比（多半是题数）不进表。</li></ul>
+<p><strong class="lbl lbl-2">现在的效果</strong> 就是现在面板"结果表"页的样子。</p>
+</article>
+<article class="card" id="ver-v0-5-0"><header><span class="tag">v0.5.0</span><span class="date">10-12</span><h3>你的评价 → 画像 → 推荐</h3></header>
+<p><strong class="lbl lbl-0">起因</strong> 你希望在论文库和每日推荐里加"我的评价"，根据评价更新画像、影响以后推什么。你说有些论文实在太烂，例如 "Recursive Self-Improvement through Multiagent Self-Supervision"，之后让我给它打了 1 分。</p>
+<p><strong class="lbl lbl-1">改了什么（ADR-0036）</strong></p>
+<ul><li><code>wb paper rate &lt;论文&gt; &lt;1-5&gt; --note &quot;理由&quot;</code>；论文页有"我的评价"区，卡片显示评价，论文库可按评价筛选 / 排序。</li><li>每日精选按评价重排：对照你评过的论文和理由，给候选打"会不会喜欢"，推送写出理由。</li><li>画像新增"口味"；新评价攒够 3 条自动起草画像修改，你确认后才写入。</li><li>构思时评价 ≤ 2 的论文不作为方法依据。</li></ul>
+</article>
+<article class="card" id="ver-v0-6-0"><header><span class="tag">v0.6.0</span><span class="date">10-13</span><h3>硬门槛 + 中稿评估 + 口味</h3></header>
+<p><strong class="lbl lbl-0">起因</strong></p>
+<ul><li>你问精选的 10 篇是按什么排序的。</li><li>推荐的 SoL-π 主要是降 token 消耗的，你更关注<strong>提点</strong>，并说"降低 token 消耗的论文不好中"。</li><li>你说推的论文都很奇怪，不像能中稿的，连 baseline 都没有。</li></ul>
+<p><strong class="lbl lbl-1">改了什么（ADR-0037）</strong></p>
+<ul><li>口味直接写进画像：喜欢"提升主指标、和领域常用方法正面比较、有消融"的工作；不喜欢"主要贡献是省 token / 成本 / 延迟"和"没有像样 baseline"的工作。写了口味就按口味重排，不必等攒够 3 条评价。</li><li><strong>硬门槛</strong>：方法类论文必须和"领域常用方法"（被 ≥ 5 篇论文当作对比的方法，如 AFlow、ADAS、MaAS、G-Designer、AgentPrune；也可在画像里指定）至少比过一个，否则不进精选。</li><li><strong>中稿评估</strong>：按 CCF-A 主会审稿标准打 1–10 分，&lt; 5 不进精选。总分 = 0.3 原分数 + 0.4 中稿评估 + 0.3 口味。达标不足 10 篇就少推。</li><li><code>wb daily repick</code>：按最新口味重新精选本期，原精选留底，补精读并推送更新。当天就按新规则重选了一次。</li></ul>
+<p><strong class="lbl lbl-3">同时修了三个问题</strong></p>
+<ul><li>第一次重新精选时批量模型额度用完，口味重排其实没做成、退回了原排序，却推送了"已重新精选"。改成：口味重排必须真的做了才算；做不成就恢复原精选、不推送，等额度恢复后自动补做再推（并推了一条更正）。</li><li>额度死锁：GPT-Load 只在有请求经过时刷新额度，旧快照上的"剩 0%"让流程一直不发请求，也就一直等不到恢复。改成重置时间已过就当作已恢复。</li><li>统计领域常用方法时 GPTSwarm 被当成模型名去掉了，已修正。</li></ul>
+</article>
+<article class="card" id="ver-v0-7-0"><header><span class="tag">v0.7.0</span><span class="date">10-14</span><h3>必读、HF Daily 栏、处处过口味</h3></header>
+<p><strong class="lbl lbl-0">起因</strong></p>
+<ul><li>你说推的大多是新的 arXiv 论文，也可以推一些 HF Daily Papers。确认要单开一栏，但"还是要和我的方向一致，不要放宽"。</li><li>你问"口味过滤"是什么，听完解释后要求所有推荐都加上。</li><li>你要 CCF-A、TPAMI、子刊上你方向的必读论文，按时间排序。</li></ul>
+<p><strong class="lbl lbl-1">改了什么</strong></p>
+<ul><li><strong>HF Daily 单独一栏</strong>（ADR-0038）：近 7 天上过 HF Daily、属于你方向的论文按点赞取前 5；不算精选、不过 baseline 门槛，但写明有没有和领域常用方法比较。</li><li><strong>所有推荐过口味过滤</strong>（ADR-0039）：精选、HF 栏、新仓库、热点、IDEA；口味分 &lt; 0.4 的不推，写出理由；被口味挡掉的 IDEA 不告诉你但保留。</li><li><strong>顶会顶刊必读</strong>（ADR-0040）：识别 CCF-A 会议 / 期刊（含 TPAMI）、ICLR、Nature / Science 子刊，排除研讨会和 Findings；用 Semantic Scholar 检索 2023 年以来的顶会论文进库；必读 = 种子 / 领域常用方法原论文 / 被 ≥ 3 篇对比 / 高引用，其余为"值得读"；面板"必读"页按时间排序。</li></ul>
+<p><strong class="lbl lbl-3">同时修了</strong></p>
+<ul><li>会议年份只用录用信息里写明的（之前拿 arXiv 年份代替，AFlow 显示成了 ICLR 2024）。</li><li>"本文方法"的归属错误：MASFactory 被算到 MetaGPT 头上、AgentPrune 被算到 AutoGen 头上，改为以方法名核对结果为准。</li><li>ACL Findings 被当成主会，改为按 DOI 区分；只靠高引用进必读的门槛提高并过口味过滤（之前混进了不相关的高引用应用论文）。</li><li>口味过滤一次送 246 项导致网关超时（504），改为每批 40 项。</li></ul>
+</article>
+<article class="card" id="ver-v0-8-0"><header><span class="tag">v0.8.0</span><span class="date">10-14</span><h3>地图改版</h3></header>
+<p><strong class="lbl lbl-0">起因</strong> 你说地图每个小节只是罗列全部论文，基本不可读。你需要从地图里看出：1. 发展史；2. 研究热点的变化趋势；3. 其它你没想到、但对研究有帮助的东西。</p>
+<p><strong class="lbl lbl-1">改了什么（ADR-0041）</strong></p>
+<ul><li><strong>发展史</strong>：各阶段主线 + 里程碑 + 每个里程碑对比过哪些更早的里程碑。</li><li><strong>研究热点变化</strong>：新增 15 个研究主题（每篇论文打 1–2 个），按半年看占比和近半年的变化，带小趋势图。</li><li><strong>评测与基线</strong>：现在要比的 baseline、每年常用的 benchmark、饱和度。</li><li><strong>空白与其它发现</strong>：主题 × 搜索方式矩阵里的空格，以及有依据的发现。</li><li>分类部分不再罗列全部论文；正文里的论文 id 显示成短名链接。</li></ul>
+</article>
+<article class="card" id="ver-v0-9-0"><header><span class="tag">v0.9.0</span><span class="date">10-14</span><h3>全面重建地图分类</h3></header>
+<p><strong class="lbl lbl-0">起因</strong> 你让我重建地图的分类部分。第一次重建基本照搬了上一版的类别。</p>
+<p><strong class="lbl lbl-1">改了什么</strong> <code>wb map rebuild --fresh</code>：重新划分类别、重选代表工作、重写"这一类没考虑到什么"，不参考上一版。重组时给 codex 的论文清单带上影响力信号（顶会顶刊、引用数、被多少篇当作对比、是否必读）和研究主题；代表工作优先选里程碑，再加近半年的代表作。</p>
+</article>
+<article class="card" id="ver-v0-10-0"><header><span class="tag">v0.10.0</span><span class="date">10-14</span><h3>构思从被拒中学习</h3></header>
+<p><strong class="lbl lbl-0">起因</strong> 你截图问"什么时候才会开始研究 IDEA"：IDEA 页一直显示"论文库积累到一定规模后才开始构思"，但其实每天都在构思，只是没有一个通过审稿。</p>
+<p><strong class="lbl lbl-1">改了什么（ADR-0042）</strong></p>
+<ul><li>以往被拒的审稿意见（撞了哪些已有工作、证据错在哪、主要弱点）作为构思材料，提示里写明四类被拒原因各要怎么避免。</li><li>接近通过的（没被否决、均分 ≥ 6）按审稿意见修改一轮，换审稿人重评；通过标准不放低。</li><li>IDEA 页改为显示每天的构思记录，并折叠列出最接近通过的候选。</li></ul>
+</article>
+<article class="card" id="ver-v0-11-0"><header><span class="tag">v0.11.0</span><span class="date">10-17</span><h3>研究线</h3></header>
+<p><strong class="lbl lbl-0">起因</strong></p>
+<ul><li>你指出每天根据当天推荐的论文想 IDEA 不合理。你选定 IDEA 的来源：你自己的研究问题、复现与 bad case、领域里的开放问题，同时保留广撒网；节奏选"少而深，持续推进"。</li><li>之后你发现研究线把服务器上一个目录里的代码当成了你的研究，而那里只是<strong>备份</strong>、不会再改。查下来是我在研究线里默认把 <code>baseline_dir</code> 的上一级当成了你的工作区和结果目录，于是有一条研究线读了备份目录里的结果和评测代码。</li></ul>
+<p><strong class="lbl lbl-1">改了什么（ADR-0043）</strong></p>
+<ul><li><strong>研究线</strong>：同时最多 3 条，每天由 codex 推进一步（精读、查新、分析失败样本、形式化、设计实验、改草稿），成熟才交独立审稿；通过成为 IDEA 并告诉你，没通过按意见继续，3 次不过就搁置。推送只报实质进展。</li><li>广撒网构思从每天改为每周一一次，接近通过的进研究线候选。</li><li><strong>修复</strong>：研究线只用你显式配置的 <code>ideation.workspace</code> / <code>ideation.badcase_roots</code>，不再从 <code>baseline_dir</code> 推断；读了备份目录的那条复现研究线已搁置，理由写明。</li></ul>
+</article>
+<article class="card unreleased" id="ver-unreleased"><header><span class="tag">未发布</span><span class="date">10-17</span><h3>说明书 + 构思材料收紧</h3></header>
+<p><strong class="lbl lbl-0">起因</strong> 你说已经不知道我都做了什么，要一份详细的说明书；之后要求用 HTML 展示、说明每个版本的变化，并且以后每次修改都同步更新这份 HTML 说明书。写说明书时核对代码，发现每周的广撒网构思会拿到守护进程记录的最近 60 个进程，包括没认领的调试进程和你在另一个项目里的一次数据下载命令（虽然构思结果没有用到它们）。</p>
+<p><strong class="lbl lbl-1">改了什么</strong></p>
+<ul><li>本说明书：Markdown 源文件 <code>docs/MANUAL.md</code> + HTML 版 <code>docs/manual.html</code>（<code>scripts/build_manual.py</code> 生成，左侧目录、深浅色、手机可读）；面板新增"说明书"页（<code>/manual</code>）；README 加链接。</li><li>维护流程加一条：每次改动同步改说明书并重新生成 HTML；CI 检查两份一致。</li><li>构思材料只给你认领到配置组、没被忽略的 Run；未认领的进程不算你的实验。加了单元测试。</li></ul>
+<p><strong class="lbl lbl-2">现在的效果</strong> 已部署；你说"发 vX"时随下个版本发布。</p>
+</article>
+</section>
+<footer>由 <code>docs/MANUAL.md</code> 生成 · 术语见 <a href="https://github.com/Roderick-Stinson/research-workbench/blob/main/CONTEXT.md" target="_blank" rel="noopener">CONTEXT.md</a> · 设计决策见 <a href="https://github.com/Roderick-Stinson/research-workbench/blob/main/docs/adr" target="_blank" rel="noopener">docs/adr</a></footer>
+</main>
+</div>
+<script>
+const links=[...document.querySelectorAll('nav.toc > ol > li > a')];
+const secs=links.map(a=>document.querySelector(a.getAttribute('href')));
+const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){links.forEach(a=>a.classList.toggle('on',a.getAttribute('href')==='#'+e.target.id));}})},{rootMargin:'-20% 0px -70% 0px'});
+secs.forEach(s=>s&&io.observe(s));
+document.querySelectorAll('nav.toc a').forEach(a=>a.addEventListener('click',()=>{const d=document.querySelector('details.mtoc');if(d)d.open=false;}));
+const tb=document.getElementById('theme');
+function cur(){return document.documentElement.dataset.theme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');}
+function setT(t){document.documentElement.dataset.theme=t;try{localStorage.setItem('wb-manual-theme',t)}catch(e){};tb.textContent=t==='dark'?'☀︎':'☾';}
+try{const s=localStorage.getItem('wb-manual-theme');if(s)document.documentElement.dataset.theme=s;}catch(e){}
+tb.textContent=cur()==='dark'?'☀︎':'☾';
+tb.addEventListener('click',()=>setT(cur()==='dark'?'light':'dark'));
+</script>
+</body>
+</html>

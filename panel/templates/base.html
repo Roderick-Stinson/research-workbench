@@ -21,6 +21,7 @@
     <a href="/hot" class="{{ 'on' if request.url.path.startswith('/hot') }}">热点</a>
     <a href="/reports" class="{{ 'on' if request.url.path.startswith('/reports') }}">报告</a>
     <a href="/inbox" class="{{ 'on' if request.url.path.startswith('/inbox') }}">待认领</a>
+    <a href="/manual">说明书</a>
   </nav>
   <div class="status">
     {% if daemon.alive %}<span><span class="dot on"></span>守护进程运行中</span>

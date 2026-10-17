@@ -16,7 +16,7 @@ GitHub 仓库是唯一来源；服务器上的部署目录是它的一个 clone�
 ## 改一个东西的流程
 
 ```
-提需求（对 agent 说） → agent 开分支 → 改代码 + 测试 + （有新决策就写 ADR）→ 开 PR → CI 通过 → 你合并 → 部署
+提需求（对 agent 说） → agent 开分支 → 改代码 + 测试 + （有新决策就写 ADR）+ 同步改说明书 → 开 PR → CI 通过 → 你合并 → 部署
 ```
 
 agent 在服务器上的具体步骤：
@@ -28,6 +28,8 @@ git checkout -b <简短描述>                      # 例如 fix/arxiv-429
 # 修改……
 python3 -m unittest discover -s tests/unit      # 单元测试
 WB_E2E_DIR=$(mktemp -d -p "$HOME") bash tests/e2e.sh   # 端到端（不碰真实数据）；目录不能在 /tmp 下（/tmp 的文件不算产物）
+# 同步改说明书 docs/MANUAL.md（见下文「说明书」），然后：
+python3 scripts/build_manual.py                 # 重新生成 docs/manual.html
 git commit -am "<中文说明改了什么、为什么>"
 git push -u origin HEAD && gh pr create --fill
 ```
@@ -41,6 +43,14 @@ bash scripts/deploy.sh          # 拉 main → 单元测试 → 更新 cron 与 
 
 部署前有未提交的改动会直接拒绝，避免"服务器上偷偷改过的代码"和仓库不一致。
 
+## 说明书（每次改动都要同步）
+
+本人读的是说明书：`docs/MANUAL.md`（源文件）和由它生成的 `docs/manual.html`（面板 `/manual`）。**每一次改动都同步改说明书**，和代码在同一个 PR 里：
+
+- 行为、命令、页面、配置、数据位置有变化 → 改对应章节；
+- 第 21 节「版本历史」的「未发布」卡片里写清：**起因**（本人说了什么 / 出了什么问题）、**改了什么**、**现在的效果**；总览表同步一行；
+- `python3 scripts/build_manual.py` 重新生成 HTML，两份一起提交。CI 跑 `--check`，HTML 和 Markdown 不一致就失败。
+
 ## 设计决策
 
 - 新的取舍写一份 `docs/adr/NNNN-<主题>.md`（背景 / 决策 / 后果），编号递增；被取代的旧 ADR 在状态里写"已被 ADR-xxxx 取代"，**不改写历史**。
@@ -49,7 +59,7 @@ bash scripts/deploy.sh          # 拉 main → 单元测试 → 更新 cron 与 
 ## 发版
 
 - 版本号：`MAJOR.MINOR.PATCH`。数据格式（run.json、claim.json、论文目录结构）不兼容地改了才升 MAJOR，并在 CHANGELOG 写迁移方法。
-- 发版步骤：更新 `CHANGELOG.md` 与 `workbench/__init__.py` 的版本 → PR 合并 → `git tag vX.Y.Z && git push --tags` → `gh release create vX.Y.Z --notes-file <CHANGELOG 对应段>`。
+- 发版步骤：更新 `CHANGELOG.md` 与 `workbench/__init__.py` 的版本，说明书开头的「适用版本」和第 21 节（「未发布」改成该版本号与日期，重新生成 HTML） → PR 合并 → `git tag vX.Y.Z && git push --tags` → `gh release create vX.Y.Z --notes-file <CHANGELOG 对应段>`。
 - 服务器上部署某个版本：`bash scripts/deploy.sh vX.Y.Z`。
 
 ## 新机器从零安装
