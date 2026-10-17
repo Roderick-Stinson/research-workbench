@@ -681,6 +681,21 @@ class TestIdeateRevise(unittest.TestCase):
         self.assertTrue(any(p["title"] == "Dup" and p["novelty_veto"] for p in past))
 
 
+class TestIdeateMaterials(unittest.TestCase):
+    def test_only_claimed_runs_reach_ideation(self):
+        from workbench import store as wbstore
+        from workbench.papers import ideate
+        for rid, claim in [("R-claimed", {"variant": "v1", "purpose": "p"}), ("R-unclaimed", None),
+                           ("R-ignored", {"ignored": True})]:
+            wbstore.save_run({"id": rid, "state": "exited", "start_ts": time.time(), "cmdline": "python x.py", "cwd": "/w"})
+            if claim:
+                wbstore.save_claim(rid, claim)
+        ids_ = [r["id"] for r in ideate._experiments_digest()["recent_runs"]]
+        self.assertIn("R-claimed", ids_)
+        self.assertNotIn("R-unclaimed", ids_)   # 守护进程抓到但没认领的（调试、下载）不算本人的实验
+        self.assertNotIn("R-ignored", ids_)
+
+
 class TestThreads(unittest.TestCase):
     def test_threads_flow(self):
         import json as _json
