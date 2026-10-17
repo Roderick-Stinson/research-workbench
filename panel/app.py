@@ -340,6 +340,15 @@ research_view.register(app, lambda request, name, **kw: render(request, name, **
 mcp_server.register(app)
 
 
+@app.get("/manual", response_class=HTMLResponse)
+def manual():
+    """说明书（docs/manual.html，由 scripts/build_manual.py 从 docs/MANUAL.md 生成）。"""
+    p = HERE.parent / "docs" / "manual.html"
+    if not p.exists():
+        raise HTTPException(404, "说明书还没生成：python3 scripts/build_manual.py")
+    return HTMLResponse(p.read_text(encoding="utf-8"))
+
+
 @app.get("/healthz")
 def healthz():
     return {"ok": True, "version": __version__, "home": str(store.home())}
