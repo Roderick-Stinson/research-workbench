@@ -57,10 +57,14 @@ def all_problems() -> list:
 
 
 def _experiments_digest() -> dict:
-    """论文项目 / claim / 配置组 / 最近的 Run（含输出文件位置，供 bad case 分析）。"""
+    """论文项目 / claim / 配置组 / 本人认领过的 Run（含输出文件位置，供 bad case 分析）。
+
+    只给认领到配置组、没被忽略的 Run：守护进程会抓到调试脚本、下载命令等进程，未认领的不算本人的实验，
+    不能拿来推断本人的研究（2026-10-17 本人纠正）。"""
     projects = wbstore.all_projects()
     runs = wbstore.all_runs()
-    recent = sorted(runs, key=lambda r: -r.get("start_ts", 0))[:60]
+    claimed = [r for r in runs if (r.get("claim") or {}).get("variant") and not (r.get("claim") or {}).get("ignored")]
+    recent = sorted(claimed, key=lambda r: -r.get("start_ts", 0))[:60]
     return {
         "projects": [{"id": p["id"], "title": p.get("title"),
                       "claims": [{"id": e["id"], "claim": e.get("claim"), "variants": e.get("variants")} for e in p.get("experiments", [])]}
@@ -117,7 +121,7 @@ PROPOSE_PROMPT = """你是「{name}」方向的研究者，为本人每天构思
 - library.json：论文库（每篇的一句话、方法、局限、维度；my_rating 是本人评价 1–5 分和理由，评价 ≤ 2 的论文不要当作方法依据）；全文在 {home}/papers/<id>/fulltext.txt，速读与抽取的数字在 quickread.json
 - map.json：领域地图（每类"没考虑到什么"是问题的天然入口）
 - problems.json：已有的问题；previous_ideas.json：以前想过的 IDEA（包括没通过评审的）——**不要重复**
-- experiments.json：本人的论文项目、claim、配置组均值方差、最近的 Run（outputs 里是逐样本结果，可做 bad case 分析）
+- experiments.json：本人的论文项目、claim、配置组均值方差、本人认领过的 Run（outputs 里是逐样本结果，可做 bad case 分析；没有就是本人还没登记实验，不要去服务器上找）
 - past_reviews.json：以前没通过的 IDEA 和独立审稿意见（撞车的已有工作、证据错在哪、主要弱点）——**先读它，别再犯同样的错**
 - field.json：方向定义
 
