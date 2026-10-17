@@ -6,7 +6,7 @@
 
 来源（优先级从高到低）：
 - mine：本人自己的研究问题（`wb thread add "问题" --mine`）；
-- repro：复现与 bad case——配置的结果目录里各方法的逐样本预测与评测（自动建一条）；
+- repro：复现与 bad case——本人显式配置的结果目录（ideation.badcase_roots）里各方法的逐样本预测与评测（配置了才自动建一条）；
 - open：领域里的开放问题——以往接近通过的候选（没被否决、均分 ≥ 6，已有审稿意见可用）优先，其次是地图里各类"没考虑到什么"；
 - scout：每周一次的广撒网构思（ideate.run）里接近通过的，也进 open 的候选。
 """
@@ -28,14 +28,11 @@ PRIORITY = {"mine": 0, "repro": 1, "open": 2}
 
 
 def cfg() -> dict:
+    """本人的工作区和结果目录只用显式配置的（ideation.workspace / ideation.badcase_roots），不从 baseline_dir 推断——
+    那里可能只是备份（2026-10-17 本人纠正）。"""
     c = (fieldmod.field().get("ideation") or {})
-    base = config.load().get("baseline_dir")
-    roots = c.get("badcase_roots")
-    if roots is None and base:
-        r = Path(base).parent / "results"
-        roots = [str(r)] if r.exists() else []
     return {"max_active": c.get("max_active_threads", 3), "max_reviews": c.get("max_reviews_per_thread", 3),
-            "badcase_roots": roots or [], "workspace": c.get("workspace") or (str(Path(base).parent) if base else None),
+            "badcase_roots": c.get("badcase_roots") or [], "workspace": c.get("workspace") or None,
             "scout_weekday": c.get("scout_weekday", 0)}
 
 

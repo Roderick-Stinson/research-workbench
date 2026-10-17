@@ -697,6 +697,10 @@ class TestThreads(unittest.TestCase):
             store.save({"id": f"arxiv-9999.9{i:04d}", "title": f"Q{i}", "intake": {"state": "relevant"}, "sources": []})
             store.save_quickread(f"arxiv-9999.9{i:04d}", {"one_liner": "x"})
         store._cache.clear()
+        f2 = dict(f, ideation={"max_active_threads": 2})
+        fieldmod.save_field(f2)
+        self.assertEqual((threads.cfg()["badcase_roots"], threads.cfg()["workspace"]), ([], None))   # 不再从 baseline_dir 推断
+        fieldmod.save_field(f)
         mine = threads.add("我的方法在 MATH 上不稳定，怎么办", "mine", {"paths": ["/x"]})
         self.assertEqual(mine["status"], "queued")
         n_steps = {}
