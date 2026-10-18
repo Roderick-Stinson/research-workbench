@@ -1,6 +1,6 @@
 # Changelog
 
-## 未发布
+## v0.12.0 — 2026-10-18
 
 ### 新增
 - 说明书 HTML 版 `docs/manual.html`（`scripts/build_manual.py` 由 MANUAL.md 生成：左侧目录、深浅色、手机可读；第 21 节每个版本一张卡片：起因 / 改了什么 / 现在的效果）；面板新增「说明书」页 `/manual`。
