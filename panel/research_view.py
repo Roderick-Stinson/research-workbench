@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 
 from workbench import config
 from workbench.papers import field as fieldmod
-from workbench.papers import codecheck, datasets, fieldmap, ideate, mapview, reports, results, store, topvenue
+from workbench.papers import classics, codecheck, datasets, fieldmap, ideate, mapview, reports, results, store, topvenue
 from workbench.util import read_json
 
 
@@ -135,6 +135,17 @@ def register(app, render):
         if "/" in pid or ".." in pid or not p.exists():
             raise HTTPException(404)
         return FileResponse(p, media_type="text/html")
+
+    @app.get("/classics", response_class=HTMLResponse)
+    def classics_page(request: Request):
+        d = classics.load()
+        d.setdefault("criteria", classics.cfg())
+        names = {}
+        for q in {q for x in (d.get("items") or {}).values() for q in x.get("later") or []}:
+            t = (store.load(q) or {}).get("title") or q
+            head = t.split(":")[0].strip()
+            names[q] = head if ":" in t and len(head) <= 28 else t[:40] + ("…" if len(t) > 40 else "")
+        return render(request, "classics.html", d=d, later_names=names, code_names=codecheck.STATUS)
 
     @app.get("/must-read", response_class=HTMLResponse)
     def must_read_page(request: Request, tab: str = "must", order: str = "new", tier: str = ""):

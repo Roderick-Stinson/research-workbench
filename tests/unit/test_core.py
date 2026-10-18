@@ -18,6 +18,10 @@ from workbench.papers import codex, explain, ids, intake, llm, quota  # noqa: E4
 from workbench.papers import field as fieldmod  # noqa: E402
 
 
+def read_json_(p):
+    return json.loads(Path(p).read_text())
+
+
 class TestRedaction(unittest.TestCase):
     def test_env_keys_and_values(self):
         env = util.redact_env({"OPENAI_API_KEY": "abc", "HF_HOME": "/x", "NOTE": "token sk-" + "a" * 30,
@@ -694,6 +698,95 @@ class TestIdeateMaterials(unittest.TestCase):
         self.assertIn("R-claimed", ids_)
         self.assertNotIn("R-unclaimed", ids_)   # 守护进程抓到但没认领的（调试、下载）不算本人的实验
         self.assertNotIn("R-ignored", ids_)
+
+
+class TestClassics(unittest.TestCase):
+    def test_classics_build(self):
+        from unittest import mock
+        from workbench.papers import classics, http, intake, llm, results, store
+        fieldmod.init_from("mas-arch-opt")
+        store.save({"id": "arxiv-9999.70000", "title": "XFlowZ: Automating Something", "intake": {"state": "relevant"},
+                    "published": "2025-01-01", "sources": []})
+        store.save_quickread("arxiv-9999.70000", {"one_liner": "x", "results": [
+            {"method": "XFlowZ", "is_proposed": True, "task": "GSM8K", "metric": "accuracy", "value": 90, "unit": "%"}]})
+        for i in range(1, 10):
+            pid = f"arxiv-9999.7000{i}"
+            store.save({"id": pid, "title": f"Later work {i}", "intake": {"state": "relevant"}, "published": f"2025-0{i}-15",
+                        "sources": []})
+            store.save_quickread(pid, {"one_liner": "y", "results": [
+                {"method": "Ours", "is_proposed": True, "task": "GSM8K", "metric": "accuracy", "value": 91, "unit": "%"},
+                {"method": "XFlowZ", "is_proposed": False, "task": "GSM8K", "metric": "accuracy", "value": 88, "unit": "%"},
+                {"method": "AutoGenZ", "is_proposed": False, "task": "GSM8K", "metric": "accuracy", "value": 80, "unit": "%"}]})
+        store._cache.clear()
+        results.rebuild_index(log=lambda *a: None)
+
+        def fake_chat(system, user, task, **kw):
+            if task == "classics-resolve":
+                i = next(int(l[1:l.index("]")]) for l in user.splitlines() if "AutoGenZ" in l)
+                return {"items": [{"i": i, "specific": True, "title": "AutoGenZ: Enabling Multi-Agent Conversation", "in_field": True}]}
+            if task == "classics-organize":
+                self.assertIn("[arxiv-9999.70000] XFlowZ", user)
+                return {"routes": [{"name": "路线A", "summary": "从 [arxiv-9999.70000] 开始", "members": [
+                    {"id": "arxiv-9999.70000", "role": "开创", "contribution": "c", "why": "w"}, {"id": "bogus", "role": "x"}]}],
+                    "reading_order": [{"id": "arxiv-9999.70000", "reason": "先读"}, {"id": "bogus"}]}
+            raise AssertionError(task)
+
+        works = {"results": [{"title": "AutoGenZ: Enabling Multi-Agent Conversation", "publication_date": "2023-08-16",
+                              "cited_by_count": 500, "ids": {"doi": "https://doi.org/10.48550/arxiv.9999.79999"}, "locations": []},
+                             {"title": "Something else entirely", "ids": {}, "locations": []}]}
+
+        def fake_get(url, params=None, **kw):
+            self.assertIn("openalex", url)                                      # OpenAlex 优先（S2 常被限流）
+            return works
+        with mock.patch.object(llm, "chat", side_effect=fake_chat), \
+                mock.patch.object(http, "get", side_effect=fake_get), \
+                mock.patch.object(intake, "run_relevance", return_value=0), \
+                mock.patch.object(intake, "run_quickreads", return_value={"ok": 0}):
+            res = classics.build(log=lambda *a: None)
+        d = classics.load()
+        x = d["items"]["arxiv-9999.70000"]
+        self.assertEqual((x["short"], x["n_compared"]), ("XFlowZ", 9))
+        self.assertEqual(x["n_later"], 9)
+        self.assertEqual(x["bench"][0]["dataset"], "GSM8K")
+        self.assertEqual(d["routes"][0]["name"], "路线A")
+        self.assertEqual([m["id"] for m in d["routes"][0]["members"]], ["arxiv-9999.70000"])   # 编出来的 id 去掉
+        self.assertEqual([o["id"] for o in d["reading_order"]], ["arxiv-9999.70000"])
+        self.assertFalse(res["paused"])
+        cache = read_json_(classics.resolve_path())
+        self.assertNotIn("ours", cache)                                          # 泛称不去找原论文
+        self.assertEqual(cache["autogenz"]["status"], "resolved")
+        store._cache.clear()
+        new = store.load(cache["autogenz"]["pid"])
+        self.assertEqual((new["classic_for"], new["backfill"]), (["autogenz"], True))   # 原论文进库，不进每日精选
+        self.assertEqual((new["arxiv"], new["citations"]), ("9999.79999", 500))
+        self.assertTrue(any(a["name"] == "AutoGenZ" and a["pending"] for a in d["adjacent"]))  # 还没判定：先列在邻近方向
+        import shutil  # 清掉本测试的论文，免得影响其它测试（领域常用方法、里程碑）
+        for pid in [f"arxiv-9999.7000{i}" for i in range(10)] + [cache["autogenz"]["pid"]]:
+            shutil.rmtree(store.pdir(pid), ignore_errors=True)
+        store._cache.clear()
+        results.rebuild_index(log=lambda *a: None)
+
+
+class TestClassicsMatch(unittest.TestCase):
+    def test_accept_rules(self):
+        from workbench.papers import classics
+        late = {"title": "ACE: Pluggable Adaptive Context Elasticizer", "published": "2026-06-30", "arxiv": "2606.31564"}
+        self.assertFalse(classics._accept(late, None, "ACE", "ace", "2026-02-01"))          # 比大多数对比它的论文还晚：不是原论文
+        renamed = {"title": "A Dynamic LLM-Powered Agent Network for Task-Oriented Agent Collaboration", "published": "2023-10-03",
+                   "arxiv": "2310.02170", "abstract": "we propose DyLAN, a framework"}
+        self.assertTrue(classics._accept(renamed, "Dynamic LLM-Agent Network: An LLM-agent Collaboration Framework", "DyLAN", "dylan",
+                                         "2025-06-01"))                                   # 标题改过，但摘要里写着方法名
+        junk = {"title": "OpenClaw: The 16 Trillion Token Autonomy Engine", "published": "2026-04-01", "doi": "10.5281/zenodo.1"}
+        self.assertFalse(classics._accept(junk, None, "OpenClaw", "openclaw", "2026-09-01"))  # 只按名字找到、没有 arXiv 号
+        other = {"title": "MOA: Multi-Objective Alignment for Role-Playing Agents", "published": "2025-12-01", "arxiv": "2512.09756",
+                 "abstract": "role-playing"}
+        self.assertFalse(classics._accept(other, "Mixture-of-Agents Enhances Large Language Model Capabilities", "MoA", "moa",
+                                          "2026-03-01"))                                  # 给了标题却对不上，名字也不在摘要里
+        follow = {"title": "Combee: Scaling Prompt Learning", "published": "2026-04-01", "arxiv": "2604.04247",
+                  "abstract": "We propose Combee, which outperforms GEPA."}
+        self.assertFalse(classics._accept(follow, None, "GEPA", "gepa", "2026-09-01"))      # 只是拿它当 baseline 的后续工作
+        orig = {"title": "GEPA: Reflective Prompt Evolution", "published": "2025-07-25", "arxiv": "2507.19457"}
+        self.assertTrue(classics._accept(orig, None, "GEPA", "gepa", "2026-01-01"))
 
 
 class TestThreads(unittest.TestCase):
