@@ -243,3 +243,16 @@ table.ws td.c3 { background: var(--accent-soft); font-weight: 650; }
 .cats { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
 .cat { padding: 12px 14px; }
 .cat p { margin: 6px 0; }
+
+/* 经典工作（ADR-0044） */
+.cl-order ol { margin: 0; padding: 12px 18px 12px 38px; }
+.cl-order li { margin: 6px 0; }
+.cl-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin-bottom: 8px; }
+.card.cl { padding: 14px 16px; }
+.cl-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin-bottom: 2px; }
+.cl-row { margin-top: 6px; }
+.cl-row .lab { display: inline-block; min-width: 6.5em; color: var(--muted); font-size: 12.5px; margin-right: 6px; }
+.cl-facts { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; color: var(--ink-2); }
+.cl-bench { margin-top: 8px; overflow-x: auto; }
+.cl-bench table { border-collapse: collapse; font-size: 12.5px; }
+.cl-bench td { padding: 2px 12px 2px 0; white-space: nowrap; }

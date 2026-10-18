@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}经典工作 · 实验工作台{% endblock %}
+{% macro name(pid) -%}{%- set x = d['items'][pid] -%}{{ x.short or (x.title_zh or x.title)|truncate(30, True, '…') }}{%- endmacro %}
+{% block body %}
+<h1>经典工作</h1>
+<p class="sub">按技术路线梳理你方向里的经典工作。按<b>影响力</b>选，不限会议：被论文库里 ≥ {{ d.criteria.min_compared }} 篇论文当作对比方法、
+或引用 ≥ {{ d.criteria.min_citations }} 且发表满一年、或是你的种子 / 领域常用方法的原论文。数字都由工作台从论文库和结果表算出，路线和每篇的点评由模型写。
+经典是参照，不过口味过滤。和 <a href="/must-read">必读</a> 的区别：必读只收顶会顶刊、按时间排。
+{% if d.built_at %}<br>事实更新于 {{ fmt_time(d.built_at) }}{% if d.organized_at %}，路线梳理于 {{ fmt_time(d.organized_at) }}（经典有变化或满 7 天时重新梳理）{% endif %}。{% endif %}</p>
+
+{% if d.paused %}<div class="empty"><p>⏸ 这次有部分没做完（额度），下次每日流程会接着做：</p>{% for p in d.paused %}<p class="small muted">{{ p }}</p>{% endfor %}</div>{% endif %}
+
+{% if not d['items'] %}
+<div class="empty"><p>{{ '还没有生成。每天的流程会生成；也可以让 agent 运行 wb classics build。' if not d.built_at else '还没有达到门槛的经典工作。' }}</p></div>
+{% else %}
+
+{% if d.reading_order %}
+<h2>从这里读起</h2>
+<div class="box cl-order"><ol>
+{% for o in d.reading_order %}{% set x = d['items'][o.id] %}
+<li><a href="#c-{{ o.id }}"><b>{{ name(o.id) }}</b></a> <span class="muted small">{{ (x.date or '')[:7] }}{% if x.venue %} · {{ x.venue }}{% endif %}</span>
+  <div class="small">{{ o.reason }}</div></li>
+{% endfor %}</ol></div>
+{% endif %}
+
+<div class="pf rsel" style="margin:18px 0 6px">
+{% for rt in d.routes %}<a class="badge" href="#route-{{ loop.index }}">{{ rt.name }} <span class="muted">{{ rt.members|length }}</span></a>{% endfor %}
+{% if d.adjacent %}<a class="badge muted" href="#adjacent">邻近方向 {{ d.adjacent|length }}</a>{% endif %}
+</div>
+
+{% for rt in d.routes %}
+<h2 id="route-{{ loop.index }}">{{ rt.name }}</h2>
+{% if rt.summary %}<p class="purpose">{{ rt.summary|ids_named }}</p>{% endif %}
+<div class="cl-list">
+{% for mem in rt.members %}{% set x = d['items'][mem.id] %}{% set c = x.code or {} %}
+<div class="card cl" id="c-{{ mem.id }}">
+  <div class="cl-head">
+    <span class="t">{{ name(mem.id) }}</span>
+    <span class="mono small muted">{{ (x.date or '')[:7] }}</span>
+    {% if x.venue %}<span class="badge {{ 'v' if x.top_venue else 'muted' }}">{{ x.venue }}</span>{% endif %}
+    {% if mem.role %}<span class="badge run">{{ mem.role }}</span>{% endif %}
+  </div>
+  <div><a href="/paper/{{ mem.id }}">{{ x.title_zh or x.title }}</a>{% if x.title_zh %} <span class="small muted">{{ x.title }}</span>{% endif %}</div>
+  {% if mem.contribution %}<div class="cl-row"><span class="lab">提出了什么</span>{{ mem.contribution }}</div>{% elif x.one_liner %}<div class="cl-row"><span class="lab">一句话</span>{{ x.one_liner }}</div>{% endif %}
+  {% if mem.why %}<div class="cl-row"><span class="lab">为什么经典</span>{{ mem.why }}</div>{% endif %}
+  <div class="cl-facts small">
+    {% for w in x.why %}<span>· {{ w }}</span>{% endfor %}
+    {% if c.status == 'open' %}<a class="badge ok" href="{{ c.url }}" target="_blank">已开源{% if c.stars %} ★{{ c.stars }}{% endif %}</a>{% elif c.status %}<span class="badge {{ 'bad' if c.status == 'dead' else 'muted' }}">{{ code_names.get(c.status, c.status) }}</span>{% endif %}
+    {% if x.has_explainer %}<a class="badge run" href="/paper/{{ mem.id }}#explainer">精读</a>{% endif %}
+    {% if x.rating %}<span class="badge">我的评价 {{ '★' * x.rating }}</span>{% endif %}
+  </div>
+  {% if x.prev %}<div class="cl-row small"><span class="lab">对比过的更早经典</span>{% for q in x.prev %}<a href="#c-{{ q }}">{{ name(q) }}</a>{{ '、' if not loop.last }}{% endfor %}</div>{% endif %}
+  {% if x.later %}<div class="cl-row small"><span class="lab">后来和它比的（{{ x.n_later }} 篇）</span>{% for q in x.later %}<a href="/paper/{{ q }}">{{ later_names.get(q, q) }}</a>{{ '；' if not loop.last }}{% endfor %}{% if x.n_later > x.later|length %} …{% endif %}</div>{% endif %}
+  {% if x.bench %}<div class="cl-bench"><table><tbody>
+    {% for b in x.bench %}<tr><td>{{ b.dataset }}</td><td class="muted">{{ b.metric }}</td><td class="mono">{{ b.value }}{{ '%' if b.unit == '%' else '' }}</td>
+      <td>{% if b.scale == 'full' %}<span class="badge ok">全量</span>{% elif b.scale == 'subset' %}<span class="badge warn">子集{% if b.n %} {{ b.n }}{% endif %}</span>{% else %}<span class="badge muted">未注明</span>{% endif %}</td>
+      <td class="small muted">{{ b.backbone }}</td></tr>{% endfor %}
+  </tbody></table><div class="small muted">原论文报告的成绩（常用 benchmark），<a href="/results">结果表</a>里能看到和其它方法的对比。</div></div>{% endif %}
+</div>
+{% endfor %}
+</div>
+{% endfor %}
+
+{% if d.adjacent %}
+<h2 id="adjacent">常被对比的邻近方向方法</h2>
+<p class="sub">这些方法经常被你方向的论文当作 baseline，但原论文本身不属于你的方向（例如通用的提示优化、记忆、框架），所以不算本方向的经典；比较时可能用得上。</p>
+<div class="box"><table class="mr"><thead><tr><th>方法</th><th>被对比</th><th>原论文</th><th>说明</th></tr></thead><tbody>
+{% for a in d.adjacent %}<tr><td class="nowrap"><b>{{ a.name }}</b></td><td class="nowrap">{{ a.n }} 篇</td>
+  <td>{% if a.pid %}<a href="/paper/{{ a.pid }}">{{ a.title }}</a>{% elif a.url %}<a href="{{ a.url }}" target="_blank">{{ a.title }}</a>{% else %}{{ a.title }}{% endif %}
+    {% if a.citations %}<span class="small muted">引用 {{ a.citations }}</span>{% endif %}{% if a.pending %} <span class="badge muted">判定中</span>{% endif %}</td>
+  <td class="small">{{ a.note or '' }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endif %}
+{% set nf = d.unresolved|rejectattr('pending')|list %}{% set pd = d.unresolved|selectattr('pending')|list %}
+{% if pd %}<p class="small muted" style="margin-top:14px">正在核对原论文（Semantic Scholar 限流时分几天查完）：{% for u in pd %}{{ u.name }}（{{ u.n }}）{{ '、' if not loop.last }}{% endfor %}。</p>{% endif %}
+{% if nf %}<p class="small muted">常被对比、但没找到原论文的：{% for u in nf %}{{ u.name }}（{{ u.n }}）{{ '、' if not loop.last }}{% endfor %}。30 天后再试。</p>{% endif %}
+{% endif %}
+{% endblock %}

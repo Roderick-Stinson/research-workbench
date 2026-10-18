@@ -381,6 +381,26 @@ def cmd_topvenue(a):
     return None
 
 
+def cmd_classics(a):
+    """wb classics build [--fresh] | ls：经典工作（ADR-0044）。"""
+    from . import classics
+
+    if a.action == "build":
+        return out_json(classics.build(fresh=a.fresh))
+    d = classics.load()
+    if a.json:
+        return out_json(d)
+    items = d.get("items") or {}
+    for rt in d.get("routes") or []:
+        print(f"== {rt['name']}")
+        for mem in rt["members"]:
+            x = items[mem["id"]]
+            print(f"  {(x.get('date') or '')[:7]}  {(x.get('short') or '')[:16]:16s}  {(x.get('title') or '')[:60]}  {mem['id']}")
+            for w in x.get("why") or []:
+                print(f"        · {w}")
+    return None
+
+
 def cmd_thread(a):
     """wb thread ls | show <线> | add "问题" [--mine|--repro|--open] [--path 路径] | park <线> --reason | resume <线> | drop <线> --reason"""
     from . import threads
@@ -487,6 +507,9 @@ def register(add):
     p.add_argument("--open", action="store_true")
     p.add_argument("--path", action="append", help="add：相关的工作区 / 结果目录（可多个）")
     p.add_argument("--reason")
+    p = add("classics", cmd_classics, "经典工作：build [--fresh]（找原论文 + 按技术路线梳理）/ ls")
+    p.add_argument("action", choices=["build", "ls"])
+    p.add_argument("--fresh", action="store_true", help="build：重新梳理路线（默认经典有变化或满 7 天才重做）")
     p = add("topvenue", cmd_topvenue, "顶会顶刊必读：run（检索 + 判定 + 录用信息 + 清单）/ ls [--worth]")
     p.add_argument("action", choices=["run", "ls"])
     p.add_argument("--worth", action="store_true", help="ls：看值得读（默认看必读）")
