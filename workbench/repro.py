@@ -31,13 +31,36 @@ def compare(v: dict, runs: list | None = None) -> list:
     return out
 
 
-def status_of(v: dict) -> str:
-    rows = compare(v)
+def status_of(v: dict, runs: list | None = None) -> str:
+    """未开始 / 进行中（还有 Run 在跑）/ 已复现 / 复现差距。论文报告了、但我们没跑的指标（例如没跑的基准）不影响判断，页面上单独说明。"""
+    runs = runs if runs is not None else stats.variant_runs(v["id"])
+    rows = compare(v, runs)
     if not rows:
         return v.get("repro_status") or "未开始"
-    if any(r["n"] == 0 for r in rows):
-        return "进行中" if any(r["n"] for r in rows) else "未开始"
-    return "已复现" if all(r.get("within") for r in rows) else "复现差距"
+    measured = [r for r in rows if "within" in r]
+    if any(r.get("state") == "running" for r in runs):
+        return "进行中"
+    if not measured:
+        return "未开始"
+    return "已复现" if all(r["within"] for r in measured) else "复现差距"
+
+
+def overview(v: dict, runs: list) -> dict:
+    """一个配置组的复现概览：Run 数、运行中、状态、容差内几项、和论文对比的各行。"""
+    rows = compare(v, runs) if v.get("reported") else []
+    done = [r for r in rows if "within" in r]
+    return {"v": v, "n_runs": len(runs), "running": sum(1 for r in runs if r.get("state") == "running"),
+            "status": status_of(v, runs) if v.get("reported") else None, "rows": rows,
+            "n_unmeasured": sum(1 for r in rows if "within" not in r),
+            "n_within": sum(1 for r in done if r["within"]), "n_compared": len(done),
+            "worst": sorted((r for r in done if not r["within"]), key=lambda r: -abs(r["gap"]))[:3]}
+
+
+def unattached(projects: list | None = None) -> list:
+    """没挂到任何项目（claim）上的配置组。复现别人的论文就是这种：按约定，别人的论文不建项目（CONTEXT.md）。"""
+    projects = projects if projects is not None else store.all_projects()
+    used = {vid for p in projects for e in p.get("experiments", []) for vid in e.get("variants", [])}
+    return [v for v in store.all_variants() if v["id"] not in used]
 
 
 def cmd_repro(a):

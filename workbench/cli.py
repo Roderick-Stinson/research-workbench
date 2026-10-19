@@ -21,7 +21,7 @@ import time
 from pathlib import Path
 
 from . import __version__, config, sessions, snapshot, stats, store
-from .util import human_bytes, human_duration, now_iso, parse_iso, read_json
+from .util import human_bytes, human_duration, now_iso, parse_iso, read_json, redact_argv
 
 # ---------------- 输出小工具 ----------------
 
@@ -203,6 +203,51 @@ def cmd_show(a):
         print("日志尾部：")
         for line in r["log_tail"][-12:]:
             print("  " + line)
+
+
+def cmd_session(a):
+    """wb session attach <RUN>... [--file 会话文件 | 从 stdin 读]：补关联启动这些 Run 的对话。
+
+    守护进程只能读这台机器上的对话记录（~/.claude/projects、~/.codex/sessions）。agent 在另一台电脑上通过 ssh 启动实验时，
+    对话在那台电脑上，Run 就关联不到。把那份对话记录传上来，存进工作台（sessions/），再按命令内容匹配每个 Run 的启动调用。"""
+    import hashlib
+
+    data = Path(a.file).read_bytes() if a.file else sys.stdin.buffer.read()
+    if not data.strip():
+        raise SystemExit("没有收到对话记录。用法：ssh <服务器> 'wb session attach <RUN>...' < <本地会话 .jsonl>\n"
+                         "  Claude Code：~/.claude/projects/<目录>/<会话 id>.jsonl；codex：~/.codex/sessions/年/月/日/rollout-*.jsonl")
+    agent = a.agent or sessions.detect_agent(data)
+    d = store.home() / "sessions"
+    d.mkdir(parents=True, exist_ok=True)
+    tmp = d / f".incoming-{os.getpid()}.jsonl"
+    tmp.write_bytes(data)
+    meta = sessions.parse_codex(str(tmp)) if agent == "codex" else sessions.parse_claude(str(tmp))
+    sid = meta.get("session_id") or hashlib.sha1(data[:4096]).hexdigest()[:16]
+    dest = d / (f"rollout-{sid}.jsonl" if agent == "codex" else f"claude-{sid}.jsonl")
+    if dest.exists() and dest.stat().st_size > len(data):
+        tmp.unlink()  # 已有更完整的一份（对话是追加写的）
+    else:
+        os.replace(tmp, dest)
+    os.chmod(dest, 0o600)
+    n_ok = 0
+    for rid in [store.resolve_run_id(x) for x in a.runs]:
+        r = store.load_run(rid)
+        li = sessions.link(r["start_ts"], r.get("argv_raw") or r.get("argv", []), r.get("cwd", ""), r.get("ancestors", []),
+                           files=[str(dest)])
+        if not li or not li.get("file"):
+            print(f"{rid}：这份对话里没找到启动它的命令（换一份对话，或确认 Run 是在这次对话里启动的）")
+            continue
+        if li.get("call_text"):
+            li["call_text"] = " ".join(redact_argv(li["call_text"].split(" ")))[:1500]
+        li.update(via="attached", attached_at=now_iso())
+        c = store.load_claim(rid) or {}
+        c["session"] = li
+        store.save_claim(rid, c)
+        store.journal("session.attach", run=rid, agent=li.get("agent"), session_id=li.get("session_id"),
+                      confidence=li.get("confidence"))
+        n_ok += 1
+        print(f"{rid}：已关联 {li.get('agent')} 会话 {li.get('session_id') or ''}（置信度 {li.get('confidence')}）")
+    print(f"关联了 {n_ok} 个 Run；对话记录存在 {dest}（面板 Run 页「对话」和 wb context 都能看到）")
 
 
 def cmd_context(a):
@@ -569,15 +614,25 @@ def cmd_adopt(a):
         allr = store.all_runs()
         for rid in list(ids):
             ids += [r["id"] for r in allr if r.get("parent_run") == rid and r["id"] not in ids]
+    no_talk = []
     for rid in ids:
         c = _apply_claim(rid, a, new=True)
         store.journal("adopt", run=rid, variant=a.variant, purpose=c.get("purpose"))
         print(f"已认领 {rid} → {a.variant}（种子 {c.get('seed')}，指标 {c.get('metrics') or '-'}）")
+        if not (store.load_run(rid).get("session") or {}).get("file"):
+            no_talk.append(rid)
     v = store.load_variant(a.variant)
     linked = [f"{p['id']}/{e['id']}" for p in store.all_projects() for e in p.get("experiments", [])
               if a.variant in e.get("variants", [])]
-    if not linked:
-        print(f"提示：配置组 {a.variant} 还没挂到任何实验（claim）上：wb exp link <项目>/<实验> {a.variant}")
+    if not linked and v.get("paper"):
+        print(f"配置组 {a.variant} 是复现论文 {v['paper']} 的：面板首页「复现」栏和这篇论文的页面会显示它和论文数字的对比")
+    elif not linked:
+        print(f"提示：配置组 {a.variant} 还没挂到任何实验（claim）上：wb exp link <项目>/<实验> {a.variant}"
+              f"（复现别人的论文不用挂，改用 wb repro ref {a.variant} --paper <论文> 记下论文报告的数字）")
+    if no_talk:
+        print(f"提示：{len(no_talk)} 个 Run 没关联到启动它的对话（多半是在另一台电脑上通过 ssh 启动的，对话不在这台服务器上）。"
+              f"把本地对话记录传上来：\n  ssh <服务器> 'wb session attach {' '.join(no_talk[:8])}{' …' if len(no_talk) > 8 else ''}' "
+              "< <本地会话 .jsonl>\n  （Claude Code：~/.claude/projects/<目录>/<会话 id>.jsonl；codex：~/.codex/sessions/年/月/日/rollout-*.jsonl）")
     runs = stats.variant_runs(a.variant)
     warns = stats.consistency(runs, stats.seed_fields_for(v, store.all_projects()))
     for w in warns:
@@ -833,6 +888,11 @@ def build_parser():
             p.add_argument("--grep", help="按命令过滤")
     p = add("show", cmd_show, "看一个 Run 的现场")
     p.add_argument("run")
+    p = add("session", cmd_session, "补关联对话：attach <RUN>...（从 stdin 或 --file 读会话记录；对话在别的机器上时用）")
+    p.add_argument("action", choices=["attach"])
+    p.add_argument("runs", nargs="+")
+    p.add_argument("--file", help="服务器上的会话文件；不给就从 stdin 读")
+    p.add_argument("--agent", choices=["claude", "codex"], help="默认按内容自动判断")
     p = add("context", cmd_context, "启动这个 Run 的对话片段（起草'目的'用）")
     p.add_argument("run")
     p.add_argument("--before", type=int, default=12)

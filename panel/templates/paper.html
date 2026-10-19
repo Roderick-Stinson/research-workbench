@@ -30,6 +30,22 @@
   <button class="copy" data-text="我想复现论文 {{ m.id }}（{{ m.title|truncate(80) }}），先按原文设定跑">复制「复现」</button>
 </div>
 
+{% if repros %}
+<h2>我们的复现 <span class="count">{{ repros|length }}</span></h2>
+{% for o in repros %}
+<div class="box rg">
+  <div class="rg-head"><a href="/v/{{ o.v.id }}"><b>{{ o.v.title or o.v.id }}</b></a>
+    {% if o.status %}<span class="badge {{ 'ok' if o.status == '已复现' else ('bad' if o.status == '复现差距' else 'run') }}">{{ o.status }}</span>{% endif %}
+    <span class="small muted">{{ o.n_runs }} 个 Run{% if o.running %}，{{ o.running }} 个运行中{% endif %}{% if o.n_compared %}；{{ o.n_within }} / {{ o.n_compared }} 项在容差内{% endif %}{% if o.n_unmeasured %}；{{ o.n_unmeasured }} 项论文报告了但还没跑{% endif %}</span></div>
+  {% if o.v.notes %}<p class="small" style="margin:6px 0">{{ o.v.notes }}</p>{% endif %}
+  {% if o.rows %}<div class="scroll-x"><table><thead><tr><th>指标</th><th class="num">论文报告</th><th class="num">我们（均值 ± std）</th><th class="num">n</th><th class="num">差</th><th>容差内</th><th>出处</th></tr></thead><tbody>
+  {% for r in o.rows %}<tr><td>{{ r.metric }}</td><td class="num">{{ fmt_num(r.reported) }}</td><td class="num">{{ fmt_ms(r.ours_mean, r.ours_std) }}</td><td class="num">{{ r.n }}</td>
+    <td class="num">{{ fmt_num(r.gap) if r.gap is defined else '-' }}</td><td>{% if r.within is defined %}{{ '✓' if r.within else '✗' }}（±{{ r.tolerance }}）{% else %}-{% endif %}</td><td class="small muted">{{ r.where or '' }}</td></tr>{% endfor %}
+  </tbody></table></div>{% else %}<p class="small muted">还没记下论文报告的数字（wb repro ref {{ o.v.id }} …）。</p>{% endif %}
+</div>
+{% endfor %}
+{% endif %}
+
 {% if qr %}
 <div class="callout-ai small muted" style="margin-top:16px">据论文{{ {'arxiv-html':' arXiv HTML 全文','pdf':' PDF 全文','abstract':'摘要（没拿到全文）'}.get(qr.basis, '') }}整理，AI 生成，以原文为准。</div>
 {% if qr.one_liner %}<p class="purpose">{{ qr.one_liner }}</p>{% endif %}

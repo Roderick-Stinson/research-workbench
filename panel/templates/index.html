@@ -32,6 +32,27 @@
 </div>
 {% endif %}
 
+{% if repro_groups %}
+<h2>复现 <span class="count">{{ repro_groups|sum(attribute='items', start=[])|length }}</span></h2>
+<p class="sub" style="margin-top:-8px">复现别人论文的配置组（不是你的论文项目，所以不在上面），和论文报告的数字对比；点进配置组看每个 Run 和逐项对比。</p>
+{% for g in repro_groups %}
+<div class="box rg">
+  <div class="rg-head">{% if g.pid %}<a href="/paper/{{ g.pid }}"><b>{{ g.title }}</b></a>{% if g.orig and g.orig != g.title %} <span class="small muted">{{ g.orig }}</span>{% endif %}
+    <span class="small muted mono">{{ g.pid }}</span>{% else %}<b>没挂到项目、也没关联论文的配置组</b>{% endif %}</div>
+  <div class="scroll-x"><table><thead><tr><th>配置组</th><th class="num">Run</th><th>复现状态</th><th>和论文数字比</th></tr></thead><tbody>
+  {% for o in g['items'] %}<tr>
+    <td><a href="/v/{{ o.v.id }}">{{ o.v.title or o.v.id }}</a> {% if o.v.baseline %}<span class="badge muted">baseline</span>{% endif %}<div class="small muted mono">{{ o.v.id }}</div></td>
+    <td class="num nowrap">{{ o.n_runs }}{% if o.running %} <span class="badge run">{{ o.running }} 运行中</span>{% endif %}</td>
+    <td class="nowrap">{% if o.status %}<span class="badge {{ 'ok' if o.status == '已复现' else ('bad' if o.status == '复现差距' else 'run') }}">{{ o.status }}</span>{% else %}<span class="small muted">没记论文数字</span>{% endif %}</td>
+    <td class="small">{% if o.n_compared %}{{ o.n_within }} / {{ o.n_compared }} 项在容差内{% if o.n_unmeasured %}（另有 {{ o.n_unmeasured }} 项没跑）{% endif %}{% if o.worst %}
+      <span class="muted">；差得最多：{% for r in o.worst %}{{ r.metric }} {{ '%+.1f'|format(r.gap) }}{{ '，' if not loop.last }}{% endfor %}</span>{% endif %}
+      {% elif o.rows %}还没有结果{% endif %}</td>
+  </tr>{% endfor %}
+  </tbody></table></div>
+</div>
+{% endfor %}
+{% endif %}
+
 <h2>待认领 <span class="count">{{ inbox_total }}</span>
   {% if inbox_total > inbox|length %}<a class="small" href="/inbox">全部 →</a>{% endif %}</h2>
 {% if inbox %}
