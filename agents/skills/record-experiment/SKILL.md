@@ -58,6 +58,23 @@ description: 用户说"记录"、"记一下这个实验"、"把这次跑的记�
 
 7. 用户给出结论时：`wb note <RUN>... -c "<结论>"`；claim 有结论时 `wb exp set <项目>/<C1> status=supported conclusion="..."`。
 
+## 复现别人的论文
+
+- **不建项目**（项目只是用户自己的论文）。建 baseline 配置组并记下论文报告的数字：
+  ```bash
+  wb variant add <vid> --title "<方法 × 基准>" --method <方法> --task <任务> --baseline --seed-fields seed
+  wb repro ref <vid> --paper <论文库 id，如 arxiv-2609.38661> --where "Table 1" --set hotpotqa_em=57.66 --set ...
+  ```
+- 跑完认领到这个配置组，`wb repro check <vid>` 看差距。面板首页"复现"栏和论文页会显示和论文数字的对比。
+
+## 在另一台电脑上通过 ssh 启动的实验
+
+守护进程只读服务器上的对话记录。你在别的电脑（例如用户的 Mac）上运行、通过 `ssh` 在服务器上启动实验时，认领后把**你自己的**对话记录传上来，
+否则 Run 关联不到启动它的对话（`wb adopt` 会提示）：
+```bash
+ssh <服务器> 'wb session attach <RUN> <RUN> ...' < ~/.claude/projects/<目录>/<会话 id>.jsonl   # codex：~/.codex/sessions/年/月/日/rollout-*.jsonl
+```
+
 ## 其它常用
 
 - 不是实验（下载脚本、调试）：`wb ignore <RUN> --reason "..."`（记录保留，只是不再出现在待认领里）。

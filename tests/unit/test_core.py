@@ -789,6 +789,65 @@ class TestClassicsMatch(unittest.TestCase):
         self.assertTrue(classics._accept(orig, None, "GEPA", "gepa", "2026-01-01"))
 
 
+class TestReproVisibility(unittest.TestCase):
+    def test_unattached_overview_and_session_attach(self):
+        from workbench import cli, repro
+        from workbench import store as wbstore
+        v = {"id": "evo-t1-test", "title": "MethodX × T1", "method": "MethodX", "task": "T1", "baseline": True,
+             "seed_fields": ["seed"], "paper": "arxiv-9999.80001",
+             "reported": {"acc": {"value": 80.0, "where": "Table 1"}, "em": {"value": 50.0, "where": "Table 1"}}}
+        wbstore.save_variant(v)
+        t0 = time.time() - 3600
+        for i, (acc, em) in enumerate([(79.5, 40.0), (80.5, 42.0)]):
+            rid = f"R20991231-00000{i}-tst"
+            wbstore.save_run({"id": rid, "state": "exited", "start_ts": t0 + 120 + i, "cwd": "/w/paper-repro",
+                              "argv": ["/w/paper-repro/.venv/bin/python", "-u", "scripts/eval_x.py", "--method", "methodx",
+                                       "--seed", str(i), "--out", f"results/x/seed{i}"],
+                              "cmdline": f"python -u scripts/eval_x.py --method methodx --seed {i}"})
+            wbstore.save_claim(rid, {"variant": v["id"], "seed": str(i), "status": "ok", "metrics": {"acc": acc, "em": em}})
+        self.assertIn("evo-t1-test", [x["id"] for x in repro.unattached()])      # 没挂到项目：首页「复现」栏要列出来
+        o = repro.overview(wbstore.load_variant("evo-t1-test"), stats.variant_runs("evo-t1-test"))
+        self.assertEqual((o["n_runs"], o["status"], o["n_within"], o["n_compared"]), (2, "复现差距", 1, 2))
+        self.assertEqual([r["metric"] for r in o["worst"]], ["em"])
+
+        # 对话在另一台电脑上：把本地会话记录传上来，按命令内容关联
+        iso = lambda ts: time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(ts))
+        lines = [{"type": "user", "sessionId": "sess-mac-1", "timestamp": iso(t0), "message": {"content": "复现某篇论文的主实验"}},
+                 {"type": "assistant", "sessionId": "sess-mac-1", "timestamp": iso(t0 + 60), "message": {"content": [
+                     {"type": "tool_use", "name": "Bash", "input": {"command":
+                      "ssh SRV 'cd /w/paper-repro && for s in 0 1; do nohup $PY -u scripts/eval_x.py --method methodx "
+                      "--seed $s --out results/x/seed$s > logs/eval_$s.log 2>&1 & done'"}}]}}]
+        f = Path(tempfile.mkdtemp()) / "mac-session.jsonl"
+        f.write_text("\n".join(json.dumps(x, ensure_ascii=False) for x in lines) + "\n")
+        self.assertIsNone((wbstore.load_run("R20991231-000000-tst").get("session") or {}).get("file"))
+        cli.main(["session", "attach", "R20991231-000000-tst", "R20991231-000001-tst", "--file", str(f)])
+        r = wbstore.load_run("R20991231-000000-tst")
+        self.assertEqual((r["session"]["agent"], r["session"]["session_id"], r["session"]["via"]), ("claude", "sess-mac-1", "attached"))
+        self.assertTrue(r["session"]["file"].endswith("sessions/claude-sess-mac-1.jsonl"))
+        evs = sessions.context(r["session"])
+        self.assertTrue(any(e.get("launch") for e in evs) and any(e["role"] == "user" for e in evs))
+
+
+class TestSessionScriptLaunch(unittest.TestCase):
+    def test_nearest_launch_call_wins(self):
+        """通过脚本启动：命令文本里没有 python 的参数，但就在启动前几秒、在 Run 目录里；更早的同参数试跑不该抢走。"""
+        t0 = time.time() - 7200
+        iso = lambda ts: time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(ts))
+        def call(ts, cmd):
+            return {"type": "assistant", "sessionId": "s2", "timestamp": iso(ts), "message": {"content": [
+                {"type": "tool_use", "name": "Bash", "input": {"command": cmd}}]}}
+        lines = [call(t0 + 600, "ssh S 'cd /w/repro && nohup $PY -u scripts/eval.py --method methodx --seed 2 --limit 2 --out smoke > l 2>&1 &'"),
+                 call(t0 + 2990, "ssh S 'cd /w/repro && tail -3 logs/smoke.log'"),
+                 call(t0 + 2995, "ssh S 'cd /w/repro && scripts/run_eval.sh methodx 2 3 --concurrency 48'"),
+                 call(t0 + 3010, "ssh S 'cd /w/repro && python3 -c \"print(1)\"; wb inbox'")]
+        f = Path(tempfile.mkdtemp()) / "s2.jsonl"
+        f.write_text("\n".join(json.dumps(x) for x in lines) + "\n")
+        argv = ["/w/repro/.venv/bin/python", "-u", "scripts/eval.py", "--method", "methodx", "--seed", "2", "--out", "results/x/seed2"]
+        li = sessions.link(t0 + 3000, argv, "/w/repro", [], files=[str(f)])
+        self.assertLess(abs(li["call_ts"] - (t0 + 2995)), 2)                  # 记录里的时间精确到秒
+        self.assertIn("run_eval.sh", li["call_text"])
+
+
 class TestThreads(unittest.TestCase):
     def test_threads_flow(self):
         import json as _json

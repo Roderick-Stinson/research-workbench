@@ -178,6 +178,7 @@ def tokens_of(cmd: str) -> list:
     return list(dict.fromkeys(toks))
 
 
+LAUNCH_RX = re.compile(r"nohup|setsid|torchrun|accelerate launch|\.sh\b|python[0-9.]*\s|&\s*(done|;|$)", re.M)
 _VAR = r"(?:\d+|\$\{?\w+\}?|\$\(\(.*?\)\))"
 
 
@@ -201,8 +202,9 @@ def _score(tokens: list, text: str) -> float:
     return hit / len(tokens)
 
 
-def link(start_ts: float, argv: list, cwd: str, chain: list) -> dict | None:
-    """为一个 Run 找启动它的会话。返回 {agent, file, session_id, call_ts, call_text, score, confidence, via}。"""
+def link(start_ts: float, argv: list, cwd: str, chain: list, files: list | None = None) -> dict | None:
+    """为一个 Run 找启动它的会话。返回 {agent, file, session_id, call_ts, call_text, score, confidence, via}。
+    files：只在这些会话文件里找（本人从别的机器传上来的对话，见 wb session attach）。"""
     agent = agent_kind_from_chain(chain)
     cmds = [" ".join(argv)]
     for a in chain:
@@ -218,8 +220,8 @@ def link(start_ts: float, argv: list, cwd: str, chain: list) -> dict | None:
     if not tok_sets:
         return None
 
-    best = None
-    for path in candidate_files(start_ts):
+    best, nearest = None, None
+    for path in (files if files is not None else candidate_files(start_ts)):
         if agent == "codex" and "/.claude/" in path:
             continue
         if agent == "claude" and "/.codex/" in path:
@@ -235,24 +237,47 @@ def link(start_ts: float, argv: list, cwd: str, chain: list) -> dict | None:
             if dt < -60 or dt > config.load()["session_search_hours"] * 3600:
                 continue
             s = max(_score(ts, e["text"]) for ts in tok_sets)
-            if s < 0.5:
+            # 启动前 5 分钟内的调用：通过脚本启动时命令文本里没有 python 的参数（如 scripts/run_eval.sh evosteer 2），门槛放低、加分
+            near = dt <= 300
+            in_dir = bool(cwd) and len(cwd) > 4 and cwd in e["text"]
+            launch = in_dir and dt <= 120 and bool(LAUNCH_RX.search(e["text"]))  # 启动前 2 分钟内、在 Run 目录里的启动命令
+            if (s <= 0) if launch else s < (0.3 if near and (in_dir or s >= 0.4) else 0.5):  # 启动命令只要有一个词对得上
                 continue
-            # 时间越近越好：1 分钟内不扣分，之后每小时扣 0.05
-            total = s + cwd_bonus - max(0.0, dt - 60) / 3600 * 0.05
-            if best is None or total > best["score"]:
-                best = {
+            # 时间越近越好：1 分钟内不扣分，之后每小时扣 0.05；5 分钟内的再加分；命令里写了 Run 的目录也加分
+            total = s + cwd_bonus + (0.1 if in_dir else 0.0) + (0.4 * (1 - max(dt, 0) / 300) if near else 0.0) \
+                - max(0.0, dt - 60) / 3600 * 0.05
+            cand = None
+            if best is None or total > best["score"] or launch:
+                cand = {
                     "agent": meta["agent"], "file": path, "session_id": meta.get("session_id"),
                     "session_cwd": meta.get("cwd"), "event_index": i, "call_ts": e["ts"],
                     "call_text": e["text"][:2000], "score": round(total, 3), "token_hit": round(s, 3),
+                    "near": near and in_dir,
                 }
+            if cand and (best is None or total > best["score"]):
+                best = cand
+            # 启动前 2 分钟内、在 Run 目录里、像是启动命令的调用：就是它。取离启动最近的那次；
+            # 启动之后的调用（两台机器时钟差几秒才会出现）排在启动之前的后面
+            key = (dt < 0, abs(dt))
+            if cand and launch and (nearest is None or key < nearest[0]):
+                nearest = (key, cand)
+    if nearest:
+        best = nearest[1]
     if best is None:
         return {"agent": agent, "confidence": "none", "via": "chain" if agent else None} if agent else None
     conf = "high" if best["token_hit"] >= 0.8 and (agent == best["agent"] or agent is None) else "medium"
     if best["token_hit"] < 0.65:
-        conf = "low"
+        conf = "medium" if best.pop("near", False) else "low"  # 启动前几分钟、在 Run 目录里的调用（脚本启动）
+    best.pop("near", None)
     best["confidence"] = conf
     best["via"] = "chain+content" if agent else "content"
     return best
+
+
+def detect_agent(head: bytes) -> str:
+    """看会话文件开头几行判断是 codex 还是 Claude Code 的记录。"""
+    t = head[:20000].decode("utf-8", "replace")
+    return "codex" if '"session_meta"' in t or '"type":"response_item"' in t or '"type": "response_item"' in t else "claude"
 
 
 def context(link_info: dict, before: int = 12, after: int = 4) -> list:

@@ -167,6 +167,24 @@ def project_overview(p, rbv, projects):
             "nwarn": nwarn}
 
 
+def repro_groups(projects, rbv):
+    """首页「复现」栏：没挂到项目上的配置组（复现别人的论文按约定不建项目），按关联的论文分组。"""
+    from workbench import repro
+    from workbench.papers import store as pstore
+    groups = {}
+    for v in repro.unattached(projects):
+        groups.setdefault(v.get("paper") or "", []).append(repro.overview(v, rbv.get(v["id"], [])))
+    out = []
+    for pid, items in groups.items():
+        m = pstore.load(pid) if pid else None
+        qr = pstore.load_quickread(pid) if m else None
+        out.append({"pid": pid, "title": ((qr or {}).get("title_zh") or (m or {}).get("title") or pid) if pid else "",
+                    "orig": (m or {}).get("title"), "items": sorted(items, key=lambda o: o["v"].get("created") or ""),
+                    "last": max((r.get("start_ts", 0) for o in items for r in rbv.get(o["v"]["id"], [])), default=0)})
+    out.sort(key=lambda g: (not g["pid"], -g["last"]))
+    return out
+
+
 # ---------------- 页面 ----------------
 
 
@@ -183,7 +201,7 @@ def index(request: Request):
             child_count[r["parent_run"]] = child_count.get(r["parent_run"], 0) + 1
     services = [r for r in inbox if "service" in r.get("tags", [])]
     total_out = sum((r.get("outputs_summary") or {}).get("bytes", 0) for r in runs)
-    return render(request, "index.html",
+    return render(request, "index.html", repro_groups=repro_groups(projects, rbv),
                   projects=[project_overview(p, rbv, projects) for p in projects if p.get("status") != "archived"],
                   inbox=main[:60], inbox_total=len(main), child_count=child_count, services=services,
                   running=sum(1 for r in runs if r.get("state") == "running"), total_runs=len(runs),

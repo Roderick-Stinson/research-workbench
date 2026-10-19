@@ -256,3 +256,7 @@ table.ws td.c3 { background: var(--accent-soft); font-weight: 650; }
 .cl-bench { margin-top: 8px; overflow-x: auto; }
 .cl-bench table { border-collapse: collapse; font-size: 12.5px; }
 .cl-bench td { padding: 2px 12px 2px 0; white-space: nowrap; }
+
+/* 复现栏 / 论文页的复现结果 */
+.box.rg { padding: 12px 16px; margin-bottom: 12px; }
+.rg-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin-bottom: 6px; }

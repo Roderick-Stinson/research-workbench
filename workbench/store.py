@@ -59,6 +59,9 @@ def load_run(run_id: str) -> dict | None:
     if run is None:
         return None
     run["claim"] = read_json(d / "claim.json", None)
+    att = (run["claim"] or {}).get("session")
+    if att and att.get("file") and not (run.get("session") or {}).get("file"):
+        run["session"] = att  # wb session attach 补关联的（对话在别的机器上，守护进程找不到）
     return run
 
 
